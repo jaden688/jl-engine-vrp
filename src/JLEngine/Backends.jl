@@ -1,7 +1,7 @@
 using HTTP, JSON3, Base64
 
 const DEFAULT_GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-const DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 const DEFAULT_OLLAMA_BASE_URL = get(ENV, "OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 
 abstract type AbstractBackend end
@@ -37,8 +37,8 @@ BACKEND_REGISTRY = Dict{String, Dict{String, Any}}(
         "label" => "Google Gemini",
         "provider" => "google_gemini",
         "gemini_endpoint" => DEFAULT_GEMINI_ENDPOINT,
-        "gemini_model" => "gemini-3.1-flash-lite-preview",
-        "model" => "gemini-3.1-flash-lite-preview",
+        "gemini_model" => "gemini-2.5-flash",
+        "model" => "gemini-2.5-flash",
         "google_api_key" => nothing,
         "timeout" => 60,
     ),
@@ -413,7 +413,7 @@ function generate(backend::GoogleGeminiBackend, messages; options=Dict{String, A
     end
 end
 
-function generate(backend::CustomHTTPBackend, messages; options=Dict{String, Any}(), timeout=nothing)
+function generate(backend::CustomHTTPBackend, messages; options=Dict{String, Any}(), timeout=nothing, tools=nothing)
     base_url = String(get(backend.config, "base_url", ""))
     isempty(base_url) && return "[ERROR: Custom HTTP backend is missing a base_url.]", Dict{String, Any}("error" => "missing_base_url")
     headers = Dict{String, String}("Content-Type" => "application/json")
@@ -466,6 +466,19 @@ function generate(backend::CustomHTTPBackend, messages; options=Dict{String, Any
     )
     !isempty(options) && merge!(payload, options)
 
+    # Wire up OAI-format tool calling (OpenAI, Cerebras, xAI, OpenRouter all share this schema)
+    if tools !== nothing && !isempty(tools)
+        oai_tools = Any[]
+        for t in (tools isa AbstractVector ? tools : [tools])
+            push!(oai_tools, Dict{String, Any}(
+                "type" => "function",
+                "function" => t,
+            ))
+        end
+        payload["tools"] = oai_tools
+        payload["tool_choice"] = "auto"
+    end
+
     # Apply provider quirks from BYTE profiles when available
     if isdefined(Main, :BYTE)
         prov = Main.BYTE.get_provider_for_model(string(model_name))
@@ -512,7 +525,38 @@ function generate(backend::CustomHTTPBackend, messages; options=Dict{String, Any
             if choice isa AbstractDict
                 message = get(choice, "message", nothing)
                 if message isa AbstractDict
-                    return String(get(message, "content", "")), Dict{String, Any}("backend" => "custom_http", "raw" => data)
+                    meta = Dict{String, Any}("backend" => "custom_http", "raw" => data)
+                    # Extract reasoning content for models that return it
+                    for rkey in ("reasoning_content", "reasoning")
+                        rv = get(message, rkey, nothing)
+                        rv isa AbstractString && !isempty(rv) && (meta["thoughts"] = String(rv))
+                    end
+                    # Parse OAI-format tool calls
+                    raw_tc = get(message, "tool_calls", nothing)
+                    if raw_tc isa AbstractVector && !isempty(raw_tc)
+                        parsed = Any[]
+                        for tc in raw_tc
+                            tc isa AbstractDict || continue
+                            fn = get(tc, "function", nothing)
+                            fn isa AbstractDict || continue
+                            name = String(get(fn, "name", ""))
+                            isempty(name) && continue
+                            raw_args = get(fn, "arguments", "{}")
+                            args = try
+                                _materialize_json(JSON3.read(raw_args isa AbstractString ? raw_args : JSON3.write(raw_args)))
+                            catch
+                                Dict{String, Any}()
+                            end
+                            push!(parsed, Dict{String, Any}(
+                                "id"   => String(get(tc, "id", "")),
+                                "name" => name,
+                                "args" => args,
+                            ))
+                        end
+                        isempty(parsed) || (meta["tool_calls"] = parsed)
+                    end
+                    text = get(message, "content", nothing)
+                    return (text === nothing || text == "" ? "" : String(text)), meta
                 end
             end
         end
@@ -524,7 +568,7 @@ function generate(backend::CustomHTTPBackend, messages; options=Dict{String, Any
     end
 end
 
-function generate(backend::AzureOpenAIBackend, messages; options=Dict{String, Any}(), timeout=nothing)
+function generate(backend::AzureOpenAIBackend, messages; options=Dict{String, Any}(), timeout=nothing, tools=nothing)
     endpoint  = rstrip(String(get(ENV, "AZURE_OPENAI_ENDPOINT", get(backend.config, "endpoint", ""))), '/')
     isempty(endpoint) && return "[ERROR: Azure backend missing AZURE_OPENAI_ENDPOINT.]", Dict{String, Any}("error" => "missing_endpoint")
     api_key   = String(get(ENV, "AZURE_OPENAI_API_KEY", get(backend.config, "api_key", "")))
@@ -551,6 +595,15 @@ function generate(backend::AzureOpenAIBackend, messages; options=Dict{String, An
         payload["reasoning_effort"] = "medium"
         payload["max_completion_tokens"] = 32768
     end
+    # OAI-format tool calling
+    if tools !== nothing && !isempty(tools)
+        oai_tools = Any[]
+        for t in (tools isa AbstractVector ? tools : [tools])
+            push!(oai_tools, Dict{String, Any}("type" => "function", "function" => t))
+        end
+        payload["tools"] = oai_tools
+        payload["tool_choice"] = "auto"
+    end
     try
         response = HTTP.post(
             url,
@@ -574,7 +627,32 @@ function generate(backend::AzureOpenAIBackend, messages; options=Dict{String, An
             if choice isa AbstractDict
                 message = get(choice, "message", nothing)
                 if message isa AbstractDict
-                    return String(get(message, "content", "")), Dict{String, Any}("backend" => "azure-openai", "raw" => data)
+                    meta = Dict{String, Any}("backend" => "azure-openai", "raw" => data)
+                    raw_tc = get(message, "tool_calls", nothing)
+                    if raw_tc isa AbstractVector && !isempty(raw_tc)
+                        parsed = Any[]
+                        for tc in raw_tc
+                            tc isa AbstractDict || continue
+                            fn = get(tc, "function", nothing)
+                            fn isa AbstractDict || continue
+                            name = String(get(fn, "name", ""))
+                            isempty(name) && continue
+                            raw_args = get(fn, "arguments", "{}")
+                            args = try
+                                _materialize_json(JSON3.read(raw_args isa AbstractString ? raw_args : JSON3.write(raw_args)))
+                            catch
+                                Dict{String, Any}()
+                            end
+                            push!(parsed, Dict{String, Any}(
+                                "id"   => String(get(tc, "id", "")),
+                                "name" => name,
+                                "args" => args,
+                            ))
+                        end
+                        isempty(parsed) || (meta["tool_calls"] = parsed)
+                    end
+                    text = get(message, "content", nothing)
+                    return (text === nothing || text == "" ? "" : String(text)), meta
                 end
             end
         end

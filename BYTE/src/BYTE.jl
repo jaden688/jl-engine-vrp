@@ -50,7 +50,7 @@ function init(db::SQLite.DB, browser_context, project_root::String="")
 end
 
 # --- Session State ---
-global _current_model = "gemini-3.1-flash-lite-preview"
+global _current_model = "gemini-2.5-flash"
 global _current_gear  = "LITE_REASONING"
 global _active_modes  = ["SASS", "HUMAN", "BINDING"]
 const _WS_RUNTIME_STATE = Dict{UInt64, Dict{Symbol,Any}}()
@@ -2240,7 +2240,7 @@ Rules:
         return ready
     end
     _pick_available_model = function(candidates::Vector{String};
-            fallback::String="gemini-3.1-flash-lite-preview")
+            fallback::String="gemini-2.5-flash")
         for candidate in candidates
             _provider_ready_for_model(candidate) && return candidate
         end

@@ -1,9 +1,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# MPF = Modular Personality Frame. The word "persona" is BANNED in this project.
+# MPF = Modular Personality Frame.
 # This file loads and resolves Modular Personality Frame (MPF) operator files.
 # Registry entries are MPFProfile structs — Modular Personality Frame Profiles.
 # Use "operator", "MPF", or "character frame" in all copy, comments, and code.
-# "Multi-Persona Format" is dead. It's Modular Personality Frame. Period.
 # ─────────────────────────────────────────────────────────────────────────────
 
 function load_mpf_registry(registry_path::AbstractString)

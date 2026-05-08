@@ -32,6 +32,32 @@ const _AUTOPILOT_LAST_TICK_AT   = Ref(0.0)
 const _AUTOPILOT_LLM_CALLS      = Ref(0)
 const _AUTOPILOT_DAY_BUCKET     = Ref("")
 
+# ── Provider-down backoff ────────────────────────────────────────────────────
+# When the active backend keeps returning bare connection-error sentinels
+# (Gemini blackout, no network, etc.), the autopilot would otherwise burn
+# its daily LLM budget retrying. Track consecutive failures and, after the
+# second one, broadcast a one-shot suggestion to swap to `/local` and stop
+# counting the calls against the budget for that tick.
+const _AUTOPILOT_PROVIDER_FAILS = Ref(0)
+const _AUTOPILOT_BACKOFF_NOTIFIED = Ref(false)
+
+const _PROVIDER_DOWN_PATTERNS = (
+    r"\[ERROR: Could not connect to Google Gemini\.\]"i,
+    r"\[ERROR: Gemini request failed"i,
+    r"\[ERROR: Gemini returned HTTP"i,
+    r"\[no backend reachable\]"i,
+    r"\[ERROR: Custom HTTP backend"i,
+)
+
+function _is_provider_down(reply::AbstractString)::Bool
+    s = String(reply)
+    isempty(s) && return false
+    for p in _PROVIDER_DOWN_PATTERNS
+        occursin(p, s) && return true
+    end
+    return false
+end
+
 # UI context stash ΓÇö set on first _autopilot_start! so the WebSocket toggle
 # can restart the loop without re-threading engine_ref/db/root from callers.
 const _AUTOPILOT_CTX            = Ref{Any}(nothing)
@@ -387,13 +413,32 @@ function _autopilot_act_reflect!(engine, db, state, tick, topic)
 
     # If no backend was reachable, don't render an empty/marker thought —
     # surface a quiet status bubble instead and skip the diary write.
-    if occursin("[no backend reachable]", reply) || startswith(reply, "(reflection skipped")
+    if occursin("[no backend reachable]", reply) || startswith(reply, "(reflection skipped") ||
+       _is_provider_down(reply)
+        # Backoff bookkeeping: refund this tick's LLM call (it never produced
+        # useful output) and surface a one-shot operator nudge after 2 in a row.
+        if _is_provider_down(reply)
+            _AUTOPILOT_LLM_CALLS[] = max(_AUTOPILOT_LLM_CALLS[] - 1, 0)
+            _AUTOPILOT_PROVIDER_FAILS[] += 1
+            if _AUTOPILOT_PROVIDER_FAILS[] >= 2 && !_AUTOPILOT_BACKOFF_NOTIFIED[]
+                _AUTOPILOT_BACKOFF_NOTIFIED[] = true
+                _autopilot_broadcast(Dict{String,Any}(
+                    "type" => "autopilot_thinking", "tick" => tick, "topic" => topic,
+                    "text" => "Provider keeps dropping the call. Try `/local` to swap to the local model — autopilot will stop chasing it.",
+                    "gait" => state["gait"], "done" => true,
+                ))
+            end
+        end
         _autopilot_broadcast(Dict{String,Any}(
             "type"=>"autopilot_thinking", "tick"=>tick, "topic"=>topic,
             "text"=>"(no backend reachable — waiting)", "gait"=>state["gait"], "done"=>true,
         ))
         return reply
     end
+
+    # Successful reply — reset backoff state.
+    _AUTOPILOT_PROVIDER_FAILS[] = 0
+    _AUTOPILOT_BACKOFF_NOTIFIED[] = false
 
     # Broadcast the actual thought
     _autopilot_broadcast(Dict{String,Any}(

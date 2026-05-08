@@ -1,0 +1,1 @@
+"""SparkByte MCP server package."""

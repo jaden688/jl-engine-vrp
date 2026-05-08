@@ -1,9 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# NAMING RULE: MPF = Modular Personality Frame. NEVER use the word "persona".
-# Use "MPF", "operator", "character frame", or "operator identity" instead.
+# NAMING RULE: MPF = Modular Personality Frame.
+# Use "MPF", "operator", "character frame", or "operator identity" in all code.
 # MPFProfile = Modular Personality Frame Profile (the registry entry per agent).
-# If you add a type, field, or comment here — do NOT use the word "persona".
-# Any PR that introduces "persona" into this file will be rejected outright.
 # ─────────────────────────────────────────────────────────────────────────────
 
 const DEFAULT_GEAR = "spur"

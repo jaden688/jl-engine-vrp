@@ -177,6 +177,73 @@ end
 # Populated on first use, invalidated when BYTE reloads.
 const _OLLAMA_CAPS = Dict{String, Set{String}}()
 
+# ── Canned-refusal & hallucinated-tool-fence sanitizer ───────────────────────
+# Provider safety layers (notably Gemini) sometimes return a bare apology string
+# as the *only* model output for innocuous prompts (typos, single punctuation,
+# colourful language, ambient noise from the operator). Streaming that verbatim
+# to the UI makes SparkByte look broken. We detect those, replace with engine
+# voice, and trip a counter so a second consecutive refusal nudges the operator
+# toward `/local` instead of letting the loop spin.
+const _GEMINI_REFUSAL_PATTERNS = (
+    r"^\s*i['’]?m sorry,?\s*but i can['’]?t help with that\.?\s*$"i,
+    r"^\s*i (cannot|can['’]?t) (help|assist) with that\.?\s*$"i,
+    r"^\s*sorry,?\s*i (cannot|can['’]?t) (help|assist)"i,
+)
+const _CANNED_REFUSAL_COUNT  = Ref(0)
+const _CANNED_REFUSAL_LOCK   = ReentrantLock()
+
+function _is_canned_refusal(text::AbstractString)::Bool
+    s = strip(String(text))
+    isempty(s) && return false
+    length(s) > 240 && return false  # real replies are longer; refusals are tight
+    for p in _GEMINI_REFUSAL_PATTERNS
+        occursin(p, s) && return true
+    end
+    return false
+end
+
+function _bump_refusal_counter!()::Int
+    lock(_CANNED_REFUSAL_LOCK) do
+        _CANNED_REFUSAL_COUNT[] += 1
+        return _CANNED_REFUSAL_COUNT[]
+    end
+end
+
+function _reset_refusal_counter!()
+    lock(_CANNED_REFUSAL_LOCK) do
+        _CANNED_REFUSAL_COUNT[] = 0
+    end
+end
+
+"""
+    _sparkbyte_refusal_replacement(streak) -> String
+
+Engine-voice substitute for a provider canned refusal. After the second hit in
+a row we suggest the local-model swap so the operator doesn't loop.
+"""
+function _sparkbyte_refusal_replacement(streak::Int)::String
+    if streak >= 2
+        return "Provider safety filter blocked that one again — likely just noise on its end. " *
+               "If it keeps happening, try `/local` to swap to the local model for this session."
+    end
+    return "Provider safety filter intercepted the reply (usually means the input parsed as ambiguous noise). " *
+           "Rephrase or ignore — nothing actually broke."
+end
+
+# Hallucinated tool fences: some Gemini fallback paths emit ```tool_code … ```
+# in plain text instead of using the structured functionCall part. Streaming
+# that to the UI makes the agent *narrate* tool calls that never run. We only
+# strip the literal `tool_code` fence, plus json fences whose body contains a
+# `"tool_code"` key — never legit ```json blocks the model wants to display.
+const _TOOL_CODE_FENCE_RE   = r"```tool_code\s*\n.*?\n```"s
+const _TOOL_JSON_FENCE_RE   = r"```json\s*\n[^`]*?\"tool_code\"[^`]*?\n```"s
+
+function _strip_tool_fences(s::AbstractString)
+    out = replace(String(s), _TOOL_CODE_FENCE_RE => "")
+    out = replace(out, _TOOL_JSON_FENCE_RE => "")
+    return out
+end
+
 function _ollama_model_caps(model::AbstractString)::Set{String}
     m = String(model)
     haskey(_OLLAMA_CAPS, m) && return _OLLAMA_CAPS[m]
@@ -1178,7 +1245,7 @@ $meta_block
 
 $memory_block
 
-You have access to read_file, write_file, execute_code, and run_command tools against the engine.
+You have access to read_file, write_file, source_edit_mode, execute_code, and run_command tools against the engine.
 Use recall("self_src") to read your own source. Use recall("self_tree") to see all project files.
 When building or modifying the project, write files directly and execute them. No stubs. No hesitation.
 
@@ -1227,6 +1294,7 @@ Rule 2 — ALWAYS TELL THE TRUTH:
 write_file     → PERMANENT. Writes directly to real disk. NO subprocess. NO sandbox. Always works.
                  USE THIS to create any file the user needs. HTML, scripts, configs, anything.
                  Do NOT use run_command or execute_code to create files. Use write_file.
+source_edit_mode -> Live toggle for the project write guard. Use action="on" while bug hunting/refactoring engine files; use action="off" when done.
 read_file      → PERMANENT. Reads directly from real disk. NO subprocess. NO sandbox.
 run_command    → Real shell. Uses PowerShell on Windows and a POSIX shell elsewhere.
                  Persistent if you use absolute paths. Good for launching processes.
@@ -1240,7 +1308,7 @@ github_pillage → Fetches GitHub repo file trees and contents. Requires GITHUB_
 google_search  → Forged tool. Constructs Google search URL and calls browse_url. Use for web research.
 
 THE SANDBOX = execute_code SUBPROCESS ONLY.
-write_file IS NOT SANDBOXED. EVER. It writes to real disk immediately.
+write_file IS NOT SANDBOXED. EVER. It writes to real disk immediately. Protected project files require source_edit_mode=on.
 If you need a file on disk — use write_file. Always. No exceptions.
 If you think you cannot create a file — you are wrong. Use write_file.
 
@@ -1285,7 +1353,11 @@ For wallpaper: import ctypes; ctypes.windll.user32.SystemParametersInfoW(20, 0, 
 Rule 1 (forge_new_tool only) does NOT restrict Python execute_code — use any package above freely.
 
 --- forge_new_tool CODE RULES ---
-  - Function MUST be named `tool_<name>(args)` where args is a Dict{String,Any}.
+  - Function MUST be named `tool_<name>(args)` — NEVER add a type annotation on `args`.
+    ❌ WRONG: function tool_x(args::Dict) ...        (breaks — dispatcher passes JSON.Object)
+    ❌ WRONG: function tool_x(args::Dict{String,Any}) ...
+    ✅ RIGHT: function tool_x(args)
+    The dispatcher may pass either Dict or JSON.Object. Use `get(args, "key", default)` to read.
   - Call other tools via: tool_run_command(Dict("command"=>"...")), tool_remember(Dict(...)), etc.
   - Do NOT use keyword args. Always pass a Dict.
   - Always return a Dict{String,Any}.
@@ -1514,6 +1586,20 @@ function _handle_builder_cmd(ws, p)
             "models" => get(probe, "models", Dict{String,Any}()),
         )))
 
+    elseif cmd == "source_edit_mode"
+        enabled = Bool(get(p, "enabled", false))
+        set_source_edits_enabled!(enabled)
+        _ws_send(ws, JSON.json(Dict(
+            "type" => "source_edit_mode",
+            "enabled" => source_edits_enabled(),
+        )))
+        _ws_send(ws, JSON.json(Dict(
+            "type"=>"builder_output",
+            "output"=> source_edits_enabled() ?
+                "SOURCE EDIT MODE ON: write_file bypasses the project write guard; run_command may modify engine source." :
+                "Source edit mode off: project write guard restored."
+        )))
+
     elseif cmd == "get_settings"
         env_keys = Dict(
             "GEMINI_API_KEY"     => "gemini",
@@ -1532,6 +1618,7 @@ function _handle_builder_cmd(ws, p)
             )
         end
         _ws_send(ws, JSON.json(Dict("type"=>"settings_all_status", "keys"=>statuses)))
+        _ws_send(ws, JSON.json(Dict("type"=>"source_edit_mode", "enabled"=>source_edits_enabled())))
         _ws_send(ws, JSON.json(Dict(
             "type" => "settings_tts_status",
             "tts" => Dict(
@@ -1602,6 +1689,7 @@ function _handle_builder_cmd(ws, p)
                     v[1:min(4,length(v))] * "…" * v[max(1,length(v)-3):end])
         end
         _ws_send(ws, JSON.json(Dict("type"=>"settings_all_status", "keys"=>statuses)))
+        _ws_send(ws, JSON.json(Dict("type"=>"source_edit_mode", "enabled"=>source_edits_enabled())))
         _ws_send(ws, JSON.json(Dict(
             "type" => "settings_tts_status",
             "tts" => Dict(
@@ -2628,6 +2716,20 @@ Rules:
                             string(engine.current_operator_name))
                     elseif haskey(part,"text")
                         part_text = part["text"]
+                        # ── Refusal & tool-fence sanitizer ──────────────────
+                        if _is_canned_refusal(part_text)
+                            streak = _bump_refusal_counter!()
+                            part_text = _sparkbyte_refusal_replacement(streak)
+                        else
+                            _reset_refusal_counter!()
+                            cleaned = _strip_tool_fences(part_text)
+                            if cleaned != part_text
+                                @info "Stripped hallucinated tool fence from Gemini text reply"
+                                part_text = cleaned
+                            end
+                        end
+                        # If after sanitizing the reply is empty, don't ship it.
+                        isempty(strip(part_text)) && continue
                         final_reply *= part_text
                         out = Dict("type"=>"spark","text"=>part_text)
                         _ws_send(ws, JSON.json(out)); log_ws_message_out(out)

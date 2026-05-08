@@ -363,7 +363,8 @@ class QuarryStore:
             LIMIT ?
         """
         with self._connect() as conn:
-            safe_query = '"' + query.replace('"', '') + '"'
+            tokens = query.replace('"', '').split()
+            safe_query = " AND ".join(f'"{t}"' for t in tokens) if tokens else '""'
             rows = conn.execute(sql, (safe_query, int(limit))).fetchall()
         hits: list[ScoutHit] = []
         for row in rows:

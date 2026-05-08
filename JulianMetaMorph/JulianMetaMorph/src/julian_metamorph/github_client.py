@@ -29,13 +29,24 @@ def _guess_language(path: str) -> str:
         ".rb": "Ruby",
         ".php": "PHP",
         ".sh": "Shell",
+        ".c": "C",
+        ".h": "C",
+        ".cc": "C++",
+        ".cpp": "C++",
+        ".cxx": "C++",
+        ".hpp": "C++",
+        ".hh": "C++",
+        ".fidl": "FIDL",
+        ".gn": "GN",
+        ".gni": "GN",
     }.get(suffix, suffix.lstrip(".").upper())
 
 
 class GitHubClient:
     API_ROOT = "https://api.github.com"
     DEFAULT_EXTENSIONS = {
-        ".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".cs", ".rb", ".php", ".sh"
+        ".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".cs", ".rb", ".php", ".sh",
+        ".c", ".h", ".cc", ".cpp", ".cxx", ".hpp", ".hh", ".fidl", ".gn", ".gni",
     }
 
     def __init__(

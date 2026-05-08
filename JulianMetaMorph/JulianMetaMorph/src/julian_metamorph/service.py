@@ -16,6 +16,8 @@ from .profile import JulianProfile
 from .quarry import QuarryStore
 from .scout import JulianMetaMorph
 from .splash_garden import SplashBenchConfig, SplashGardenConfig, render_splash_garden, run_splash_garden_bench
+from .tools_osv import OSVScanner
+from .tools_syzkaller import SyzkallerBridge
 from .watchdog import get_watchdog
 
 
@@ -40,6 +42,14 @@ class HuntRequest(BaseModel):
     repo_limit: int = 5
     files_per_repo: int = 40
     hit_limit: int = 10
+
+
+class BugHuntRequest(BaseModel):
+    target_repo: str
+    files_limit: int = 80
+    hit_limit: int = 20
+    run_osv: bool = True
+    run_syzkaller: bool = False
 
 
 class CuriosityHuntRequest(BaseModel):
@@ -155,6 +165,32 @@ def create_app(
             "queries_used": result.queries_used,
             "repos_ingested": result.repos_ingested,
             "hits": [asdict(h) for h in result.hits],
+        }
+
+    @app.post("/hunt/bugs")
+    def hunt_bugs(request: BugHuntRequest) -> dict[str, object]:
+        """Bug-hunt mode: ingest a target repo, scan for vulnerability patterns, run OSV + optional Syzkaller."""
+        result = morph.hunt_bugs(
+            request.target_repo,
+            files_limit=request.files_limit,
+            hit_limit=request.hit_limit,
+        )
+        osv_results = None
+        syzkaller_results = None
+        if request.run_osv:
+            osv = OSVScanner()
+            osv_results = osv.scan_repo(request.target_repo)
+        if request.run_syzkaller:
+            syz = SyzkallerBridge()
+            syzkaller_results = syz.get_crashes(request.target_repo)
+        return {
+            "task": result.task,
+            "hunt_id": result.hunt_id,
+            "queries_used": result.queries_used,
+            "repos_ingested": result.repos_ingested,
+            "hits": [asdict(h) for h in result.hits],
+            "osv": osv_results,
+            "syzkaller": syzkaller_results,
         }
 
     @app.post("/hunt/curiosity")

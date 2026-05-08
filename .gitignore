@@ -164,3 +164,21 @@ full_telemetry.jsonl
 # Embedded clone repositories and nested git metadata
 jlenginedata/clones/
 **/.git
+
+# Next.js build output
+web/.next/
+.next/
+
+# VRP scratch / sensitive — private bug-hunt working directory, never push
+starnix_vrp_kit/
+starnix_vrp_kit.zip
+starnix_vrp_proof_kit/
+starnix_vrp_proof_kit.zip
+fuchsia_ai_extract/
+
+# One-off debug / scratch scripts
+dump_prompt.jl
+change_to_local*.jl
+
+# Worktrees
+.claude/worktrees/

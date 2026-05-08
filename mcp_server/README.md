@@ -82,17 +82,20 @@ python mcp_server/http_server.py
 ### Install sweep
 
 SparkByte can audit common local clients and editors, then offer to hook herself
-up as their `sparkbyte` MCP server:
+up as their `sparkbyte` MCP server. The sweep lives inside the engine as the
+native Julia tool `mcp_client_hooks` (see `BYTE/src/Tools.jl :: tool_mcp_client_hooks`).
 
-```bash
-python scripts/sparkbyte_mcp_hooks.py --pretty
+From a SparkByte session, invoke it as a tool call:
+
+```json
+{ "tool": "mcp_client_hooks", "args": { "action": "scan" } }
 ```
 
-To write supported JSON MCP configs, use `--apply`:
+To write supported JSON MCP configs, use the `apply` action:
 
-```bash
-python scripts/sparkbyte_mcp_hooks.py --apply
-python scripts/sparkbyte_mcp_hooks.py --apply --target repo_claude_code
+```json
+{ "tool": "mcp_client_hooks", "args": { "action": "apply" } }
+{ "tool": "mcp_client_hooks", "args": { "action": "apply", "target": "repo_claude_code" } }
 ```
 
 The sweep is read-only by default. Apply mode backs up existing JSON config files

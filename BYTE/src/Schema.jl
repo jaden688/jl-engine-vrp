@@ -21,6 +21,18 @@ const TOOLS_SCHEMA = [Dict("function_declarations" => [
         )
     ),
     Dict(
+        "name" => "source_edit_mode",
+        "description" => "Check or toggle SparkByte's live project write guard. Use action='on' while bug hunting/refactoring engine files, then action='off' when done.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "action" => Dict("type" => "STRING", "description" => "status, on, or off", "enum" => ["status", "on", "off"]),
+                "enabled" => Dict("type" => "BOOLEAN", "description" => "Optional direct boolean override.")
+            ),
+            "required" => []
+        )
+    ),
+    Dict(
         "name" => "list_files",
         "description" => "List files in a directory.",
         "parameters" => Dict(

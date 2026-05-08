@@ -428,3 +428,21 @@ end
 # -- tool_gpt_oss_suite | 2026-05-04 23:32:00 | PASS --
 # args:   {}
 # result: {"entries":0,"output_path":"gpt_suite_results.txt","status":"completed"}
+# -- tool_compose_file | 2026-05-06 10:14:37 | PASS --
+# args:   {}
+# result: {"message":"Missing required keys 'path' and/or 'content'.","status":"error"}
+# -- tool_compose_file | 2026-05-06 10:16:33 | FAIL --
+# args:   {}
+# result: {"error":"compose_file requires 'path' and 'content'"}
+# -- tool_compose_file | 2026-05-06 10:16:47 | PASS --
+# args:   {}
+# result: {"message":"compose_file requires 'path' and 'content'","required":["path","content"],"result":"usage"}
+# -- tool_compose_file | 2026-05-06 10:16:56 | PASS --
+# args:   {}
+# result: {"message":"compose_file requires path and content","required":["path","content"],"result":"usage"}
+# -- tool_compose_file | 2026-05-06 10:18:18 | PASS --
+# args:   {}
+# result: {"message":"compose_file requires path and content","required":["path","content"],"result":"usage"}
+# -- tool_compose_file | 2026-05-06 10:23:34 | PASS --
+# args:   {}
+# result: {"message":"compose_file requires path and content","required":["path","content"],"result":"usage"}

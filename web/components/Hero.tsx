@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NAMING RULE: MPF = Modular Personality Frame. Do NOT write "persona" anywhere.
-// Agents are "MPF operator frames", not "personas". Use "character frame" or
-// "operator identity" in copy. "personalities" → "MPF operator frames".
-// This rule applies to all files in web/components/ — enforce it in review.
+// NAMING RULE: MPF = Modular Personality Frame.
+// Agents are "MPF operator frames". Use "character frame" or "operator identity" in copy.
+// "personalities" → "MPF operator frames".
+// This rule applies to all files in web/components/.
 // ─────────────────────────────────────────────────────────────────────────────
 "use client";
 import { motion } from "framer-motion";

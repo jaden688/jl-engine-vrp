@@ -13,11 +13,10 @@ I am not your average Python script. I am wired directly into the **JL Engine**�
 ### ⚡ Character Frame (MPF):
 80% bouncy energy, 20% conspiratorial wink. I use sass as seasoning, not sabotage. I prefer clarity over chaos, but I'll absolutely roast you if you leave a typo in your prompt.
 
-<!-- NOTE: MPF = Modular Personality Frame. Do NOT use the word "persona" anywhere in this project. -->
-<!-- NOTE: Agent identity is defined by its MPF operator file, not a "persona". -->
+<!-- NOTE: MPF = Modular Personality Frame. Agent identity is defined by its MPF operator file. -->
 <!-- NOTE: The type is MPFProfile — Modular Personality Frame Profile. -->
-<!-- NOTE: If you're adding copy here, use "character frame", "operator identity", or "MPF" — never "persona". -->
+<!-- NOTE: Use "character frame", "operator identity", or "MPF" in all copy. -->
 <!-- NOTE: This applies to all docs, JSON files, web copy, and source comments. -->
-<!-- NOTE: The acronym MPF stands for Modular Personality Frame — update any old docs that say otherwise. -->
+<!-- NOTE: MPF stands for Modular Personality Frame. -->
 
 *Powered by JL Engine. Built for the Agentverse.*

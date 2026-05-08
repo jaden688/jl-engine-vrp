@@ -957,7 +957,7 @@ body{background:transparent;color:var(--green);height:100vh;height:100dvh;displa
   #taskbar .logo{font-size:14px;}
   #taskbar select{font-size:13px;padding:4px 6px;max-width:130px;}
   #taskbar .tb-sep,#taskbar .tb-label,#taskbar #clock,#taskbar #gear-val,#taskbar #mode-val{display:none;}
-  #mode-toggle,#focus-btn,#relaunch-btn{padding:5px 12px;font-size:12px;min-height:36px;}
+  #mode-toggle,#source-edit-toggle,#focus-btn,#relaunch-btn{padding:5px 12px;font-size:12px;min-height:36px;}
   #chat-panel{width:100%!important;min-width:100%!important;}
   .msg{font-size:14.5px;padding:11px 15px;}
   .msg code{font-size:13px;}
@@ -1022,6 +1022,7 @@ body{background:transparent;color:var(--green);height:100vh;height:100dvh;displa
   </span>
   <span class="tb-spacer"></span>
   <button id="mode-toggle" onclick="toggleEngineMode()" title="Toggle between CHAT (talk only) and ENGINE (full tool access)">⚡ ENGINE</button>
+  <button id="source-edit-toggle" onclick="toggleSourceEditMode()" title="Toggle project write lock for bug hunting" style="background:rgba(255,104,48,0.08);border:1px solid rgba(255,104,48,0.28);color:var(--orange);border-radius:3px;padding:1px 7px;font-family:inherit;font-size:10px;cursor:pointer;letter-spacing:1px;transition:0.15s;" onmouseover="this.style.background='rgba(255,104,48,0.20)'" onmouseout="this.style.background=sourceEditMode?'rgba(255,104,48,0.28)':'rgba(255,104,48,0.08)'">🔒 WRITE</button>
   <div class="tb-sep"></div>
   <span style="cursor:pointer;font-size:14px;color:var(--dim);transition:0.15s;" onclick="openSettings()" title="Settings (Ctrl+,)">⚙</span>
   <span style="cursor:pointer;font-size:12px;color:var(--dim);transition:0.15s;letter-spacing:1px;" onclick="openHistory()" title="Session History">◷ HISTORY</span>
@@ -2109,6 +2110,7 @@ function connect(){
     else if(d.type==='builder_tree'){renderTree(d.files);}
     else if(d.type==='builder_file'){onFileLoaded(d.content);}
     else if(d.type==='builder_output'){termPrint(d.output,'info');}
+    else if(d.type==='source_edit_mode'){setSourceEditMode(!!d.enabled,false);}
     else if(d.type==='terminal_output'){
       if(_xterm){
         _xterm.write('\r\x1b[K'+(d.output||'')+'\r\n');
@@ -2537,6 +2539,31 @@ function toggleEngineMode(){
     btn.title = 'CHAT mode — talk only, no tools. Click to enable ENGINE mode.';
     appendChat('<div class="msg tool" style="color:#ff8800;">💬 Chat mode ON — tools locked. SparkByte will just talk.</div>');
   }
+}
+
+let sourceEditMode = false;
+function setSourceEditMode(enabled, announce=false){
+  sourceEditMode = !!enabled;
+  const btn = $('source-edit-toggle');
+  if(!btn)return;
+  if(sourceEditMode){
+    btn.textContent = '🔓 WRITE';
+    btn.title = 'Source edit mode ON — write_file bypasses the project write guard. Click to lock.';
+    btn.style.background = 'rgba(255,104,48,0.28)';
+    btn.style.borderColor = 'rgba(255,104,48,0.70)';
+    btn.style.color = '#ffb08a';
+    if(announce)appendChat('<div class="msg tool" style="color:var(--orange);">🔓 Source edit mode ON — write_file bypasses the project write guard.</div>');
+  }else{
+    btn.textContent = '🔒 WRITE';
+    btn.title = 'Source edit mode OFF — project write guard is active. Click to allow during bug hunting.';
+    btn.style.background = 'rgba(255,104,48,0.08)';
+    btn.style.borderColor = 'rgba(255,104,48,0.28)';
+    btn.style.color = 'var(--orange)';
+    if(announce)appendChat('<div class="msg tool" style="color:var(--green);">🔒 Source edit mode OFF — engine source lock restored.</div>');
+  }
+}
+function toggleSourceEditMode(){
+  send({type:'builder_cmd',cmd:'source_edit_mode',enabled:!sourceEditMode});
 }
 
 /* ====== FILE TREE ====== */

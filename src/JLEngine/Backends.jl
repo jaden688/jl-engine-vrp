@@ -240,7 +240,7 @@ function generate(backend::NoopBackend, messages; options=Dict{String, Any}(), t
     return reply, Dict{String, Any}("provider" => "noop", "status" => "no_backend", "model" => "noop-stub", "options" => options)
 end
 
-function generate(backend::OllamaBackend, messages; options=Dict{String, Any}(), timeout=30)
+function generate(backend::OllamaBackend, messages; options=Dict{String, Any}(), timeout=30, tools=nothing)
     base_url = rstrip(String(get(backend.config, "baseUrl", DEFAULT_OLLAMA_BASE_URL)), '/')
     model = String(get(backend.config, "modelName", "qwen3:4b"))
     payload = Dict{String, Any}(
@@ -249,6 +249,15 @@ function generate(backend::OllamaBackend, messages; options=Dict{String, Any}(),
         "stream" => false,
     )
     !isempty(options) && (payload["options"] = options)
+    # Forward tool catalog to Ollama in OpenAI-compatible function-calling format.
+    # Ollama /api/chat accepts the same {type:"function", function:{...}} schema.
+    if tools !== nothing && !isempty(tools)
+        oai_tools = Any[]
+        for t in (tools isa AbstractVector ? tools : [tools])
+            push!(oai_tools, Dict{String, Any}("type" => "function", "function" => t))
+        end
+        payload["tools"] = oai_tools
+    end
 
     try
         response = HTTP.post("$(base_url)/api/chat", ["Content-Type" => "application/json"], JSON3.write(payload); readtimeout=timeout)

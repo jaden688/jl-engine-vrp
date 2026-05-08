@@ -192,6 +192,43 @@ end
 
 get_llm_boot_prompt(engine::JLEngineCore, target::AbstractString="generic_llm") = get_llm_boot_prompt(engine.current_operator_data, target)
 
+"""
+    _build_tools_for_backend()
+
+Pull the static + dynamic tool catalogs from BYTE and flatten them into a list
+of OpenAI/Gemini-compatible function declarations. Returns `nothing` if BYTE
+isn't loaded (e.g., during isolated unit tests of the engine core).
+
+This is the bridge fix: `run_turn!` had been calling `generate(...)` without
+forwarding tools, so every backend request went out with no tool catalog —
+LLMs then refused tool-required tasks because they literally didn't know any
+tools existed. Routing this through `tools=` makes them visible to every model.
+"""
+function _build_tools_for_backend()
+    declarations = Any[]
+    try
+        if isdefined(Main, :BYTE) || isdefined(@__MODULE__, :BYTE)
+            byte_mod = isdefined(@__MODULE__, :BYTE) ? getfield(@__MODULE__, :BYTE) : Main.BYTE
+            if isdefined(byte_mod, :TOOLS_SCHEMA)
+                schema = getfield(byte_mod, :TOOLS_SCHEMA)
+                if schema isa AbstractVector && !isempty(schema)
+                    first_group = schema[1]
+                    if first_group isa AbstractDict && haskey(first_group, "function_declarations")
+                        append!(declarations, first_group["function_declarations"])
+                    end
+                end
+            end
+            if isdefined(byte_mod, :DYNAMIC_SCHEMA)
+                dyn = getfield(byte_mod, :DYNAMIC_SCHEMA)
+                dyn isa AbstractVector && append!(declarations, dyn)
+            end
+        end
+    catch e
+        @warn "_build_tools_for_backend failed; LLM will see no tools" exception=(e, catch_backtrace())
+    end
+    return isempty(declarations) ? nothing : declarations
+end
+
 function run_turn!(engine::JLEngineCore, user_message::AbstractString; image=nothing, mime=nothing, operator_name=nothing, backend_id=nothing, backend_overrides=nothing)
     snapshot = analyze_turn!(engine, user_message; image=image, mime=mime, operator_name=operator_name)
     messages = _build_messages(engine, user_message, snapshot; image=image, mime=mime)
@@ -200,7 +237,8 @@ function run_turn!(engine::JLEngineCore, user_message::AbstractString; image=not
         "top_p" => clamp(get(snapshot["aperture_state"], "top_p", 0.7), 0.1, 1.0),
     )
     backend = backend_id === nothing ? get_brain_backend() : get_backend(String(backend_id); overrides=backend_overrides)
-    reply, backend_meta = generate(backend, messages; options=options)
+    tools = _build_tools_for_backend()
+    reply, backend_meta = generate(backend, messages; options=options, tools=tools)
     context = record_turn!(engine, user_message, reply; snapshot=snapshot)
     return Dict{String, Any}(
         "ok" => true,

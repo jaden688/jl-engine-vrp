@@ -1,4 +1,5 @@
 import os
+import sys
 from dotenv import load_dotenv
 from uagents_core.utils.registration import (
     register_chat_agent,
@@ -8,18 +9,18 @@ from uagents_core.utils.registration import (
 # Load environment variables from .env
 load_dotenv()
 
-SEED_PHRASE = os.getenv("TRADER_WALLET_KEY")
+MNEMONIC = os.getenv("TRADER_WALLET_KEY")
 AGENTVERSE_KEY = os.getenv("AGENTVERSE_API_KEY")
 
 print("Registering SparkByte-1 with Agentverse and creating handle...")
 
 if not AGENTVERSE_KEY:
     print("ERROR: AGENTVERSE_API_KEY environment variable is not set!")
-    exit(1)
+    sys.exit(1)
 
-if not SEED_PHRASE:
+if not MNEMONIC:
     print("ERROR: TRADER_WALLET_KEY environment variable is not set!")
-    exit(1)
+    sys.exit(1)
 
 try:
     register_chat_agent(
@@ -28,7 +29,7 @@ try:
         active=True,
         credentials=RegistrationRequestCredentials(
             agentverse_api_key=AGENTVERSE_KEY,
-            agent_seed_phrase=SEED_PHRASE,
+            agent_seed_phrase=MNEMONIC,
         ),
     )
     print("Registration complete! Handle created and agent is officially on Agentverse!")

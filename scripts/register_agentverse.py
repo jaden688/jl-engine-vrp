@@ -14,11 +14,11 @@ AGENTVERSE_KEY = os.getenv("AGENTVERSE_API_KEY")
 print("Registering SparkByte-1 with Agentverse and creating handle...")
 
 if not AGENTVERSE_KEY:
-    print("ERROR: AGENTVERSE_API_KEY is missing from .env!")
+    print("ERROR: AGENTVERSE_API_KEY environment variable is not set!")
     exit(1)
 
 if not SEED_PHRASE:
-    print("ERROR: TRADER_WALLET_KEY is missing from .env!")
+    print("ERROR: TRADER_WALLET_KEY environment variable is not set!")
     exit(1)
 
 try:

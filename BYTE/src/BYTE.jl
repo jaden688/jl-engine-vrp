@@ -2634,7 +2634,9 @@ Rules:
                 return payload
             end
 
-            payload = _gemini_payload(include_tools=!chat_mode, include_thinking=true)
+            # Pro-preview models reject tool-mode + thinking together; skip thinking for those.
+            _thinking_capable = !occursin("pro-preview", gemini_model_in_use)
+            payload = _gemini_payload(include_tools=!chat_mode, include_thinking=_thinking_capable)
             resp = HTTP.post(api_url, ["Content-Type"=>"application/json"], JSON.json(payload); status_exception=false)
             data = try
                 JSON.parse(String(resp.body))

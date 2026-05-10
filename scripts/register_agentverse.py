@@ -8,8 +8,8 @@ from uagents_core.utils.registration import (
 # Load environment variables from .env
 load_dotenv()
 
-SEED_PHRASE = os.getenv("TRADER_WALLET_KEY", "")
-AGENTVERSE_KEY = os.getenv("AGENTVERSE_API_KEY", "")
+SEED_PHRASE = os.getenv("TRADER_WALLET_KEY")
+AGENTVERSE_KEY = os.getenv("AGENTVERSE_API_KEY")
 
 print("Registering SparkByte-1 with Agentverse and creating handle...")
 

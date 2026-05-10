@@ -15,11 +15,11 @@ AGENTVERSE_KEY = os.getenv("AGENTVERSE_API_KEY")
 print("Registering SparkByte-1 with Agentverse and creating handle...")
 
 if not AGENTVERSE_KEY:
-    print("ERROR: AGENTVERSE_API_KEY environment variable is not set!")
+    print("ERROR: AGENTVERSE_API_KEY environment variable is not set. Please configure it in your .env file.")
     sys.exit(1)
 
 if not MNEMONIC:
-    print("ERROR: TRADER_WALLET_KEY environment variable is not set!")
+    print("ERROR: TRADER_WALLET_KEY environment variable is not set. Please configure it in your .env file.")
     sys.exit(1)
 
 try:

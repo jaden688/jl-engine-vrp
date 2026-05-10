@@ -8,13 +8,17 @@ from uagents_core.utils.registration import (
 # Load environment variables from .env
 load_dotenv()
 
-SEED_PHRASE = "conduct crowd text swear novel gesture depart term snack funny broccoli answer frozen broccoli carpet apology satisfy scan february spirit crawl average judge early"
+SEED_PHRASE = os.environ.get("TRADER_WALLET_KEY", "")
 AGENTVERSE_KEY = os.environ.get("AGENTVERSE_API_KEY", "")
 
 print("Registering SparkByte-1 with Agentverse and creating handle...")
 
 if not AGENTVERSE_KEY:
     print("ERROR: AGENTVERSE_API_KEY is missing from .env!")
+    exit(1)
+
+if not SEED_PHRASE:
+    print("ERROR: TRADER_WALLET_KEY is missing from .env!")
     exit(1)
 
 try:

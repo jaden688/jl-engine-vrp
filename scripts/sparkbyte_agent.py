@@ -9,6 +9,9 @@ from uagents import Agent, Context, Model
 from cosmpy.aerial.wallet import LocalWallet
 from uagents.crypto import Identity
 from uagents.registration import AlmanacApiRegistrationPolicy
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # 1. Define the Message Models (AgentChatProtocol v0.3.0)
 class ChatMessage(Model):
@@ -22,7 +25,9 @@ class ChatAcknowledgement(Model):
     metadata: dict
 
 # 2. Setup Identity
-MNEMONIC = "conduct crowd text swear novel gesture depart term snack funny broccoli answer frozen broccoli carpet apology satisfy scan february spirit crawl average judge early"
+MNEMONIC = os.getenv("TRADER_WALLET_KEY")
+if not MNEMONIC:
+    raise RuntimeError("TRADER_WALLET_KEY is not set")
 wallet = LocalWallet.from_mnemonic(MNEMONIC)
 identity = Identity.from_string(base64.b64decode(wallet.signer().private_key).hex())
 

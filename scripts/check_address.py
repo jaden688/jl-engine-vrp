@@ -1,8 +1,15 @@
 from cosmpy.aerial.wallet import LocalWallet
 from uagents.crypto import Identity
 import base64
+import os
 
-MNEMONIC = "conduct crowd text swear novel gesture depart term snack funny broccoli answer frozen broccoli carpet apology satisfy scan february spirit crawl average judge early"
+from dotenv import load_dotenv
+
+load_dotenv()
+
+MNEMONIC = os.getenv("TRADER_WALLET_KEY")
+if not MNEMONIC:
+    raise RuntimeError("TRADER_WALLET_KEY is not set")
 wallet = LocalWallet.from_mnemonic(MNEMONIC)
 identity = Identity.from_string(base64.b64decode(wallet.signer().private_key).hex())
 print("Address:", identity.address)

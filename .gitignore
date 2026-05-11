@@ -1,0 +1,184 @@
+# Secrets
+.env
+secret.mystic
+.azure-cli/
+.azure/
+.pg_admin_password.secret
+.pg_connection_string.secret
+
+# Local Azure state dumps (not secrets, but noisy + contain account info)
+ca-current.yaml
+sb_reply.json
+
+# Database
+*.db
+*.sqlite
+*.db-shm
+*.db-wal
+
+# Julia artifacts
+Manifest.toml
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+
+# Temp files from execute_code tool
+tmp_exec_*.py
+tmp_exec_*.jl
+
+# Telemetry & logs
+full_telemetry.jsonl
+telemetry_logs/
+*.jsonl
+*.log
+thought_log.txt
+telemetry_test.txt
+
+# Claude Code local config / memory
+.claude/
+
+# Dynamic tool registry (runtime-generated)
+dynamic_tools_registry.json
+dynamic_tools.jl
+dynamic_tools_quarantine.json
+
+# MetaMorph scout list (runtime-generated scrape)
+metamorph_scout_list.json
+
+# Grok telemetry logs
+grok_telemetry/
+
+# Inspection / scratch dirs
+_mcp_inspect/
+_clutter/
+mcp.zip
+a2a-inspector/
+a2a-tck/
+elevenlabs-mcp/
+JulianMetaMorph.zip
+JulianMetaMorph/JulianMetaMorph/data/.julian_curiosity_idx
+temp/
+temp_*.jl
+.dockertrigger
+
+# Deploy artifacts / local notes
+deploy_log.txt
+CLAUDE.md
+AI_Automation_Blueprint.md
+AI_Automation_Blueprint.pdf
+
+# Editor
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.CondaPkg/
+
+# OS
+.DS_Store
+Thumbs.db
+pitreader_backup_copy/
+
+# Project bloat — these are nested copies / moved into their own repos
+Metta4/
+webula-final-repo-Webula-Final1-main/
+nexus-os---ai-terminal*/
+nexus-os---ai-terminal*.zip
+.julia_depot/
+_vibecheck_audit/
+docs/
+logs/
+
+# Scratch / one-off scripts & benchmarks not part of the engine
+inference_benchmark.jl
+matrix_benchmark.jl
+speed_test_matrix.jl
+change_model.jl
+change_to_local.jl
+cerebras_stream.py
+parse_sb.py
+check_keys.ps1
+peek_env.ps1
+wait_up.ps1
+launch.ps1
+hello_jaden.txt
+sparkbyte_demo.html
+SparkByte_Live_Feed.md
+TRUTH.md
+sparkbyte_memory.db.bak-*
+data/budget_ledger.json
+
+# Fetch wallet — NEVER ignore these, wallet address must survive resets
+!data/fetch_wallet.json
+!data/fetch_wallet.lock
+!data/hot_wallet.json
+
+# Hot wallet key — NEVER commit, stays local only
+data/hot_wallet.key
+
+
+# Private keys — NEVER commit
+private_keys.json
+
+# Runtime boot logs (local only)
+live_boot.txt
+boot_stdout.txt
+boot_stderr.txt
+*.bak
+
+# PackageCompiler EXE build output (huge — sysimage + bundled deps)
+build/
+*.exe
+sparkbyte-*.zip
+
+# Local/runtime artifacts
+.env
+.env.*.local
+*.log
+*.out.log
+*.err.log
+*.jsonl
+*.db
+*.sqlite
+*.sqlite3
+__pycache__/
+*.pyc
+.vs/
+.vscode/
+.mypy_cache/
+.CondaPkg/
+.azure/
+.sparkbyte-browser-profile/
+node_modules/
+web/node_modules/
+data/images/
+boot_stdout.txt
+boot_stderr.txt
+live_boot.txt
+full_telemetry.jsonl
+
+# Embedded clone repositories and nested git metadata
+jlenginedata/clones/
+**/.git
+
+# Next.js build output
+web/.next/
+.next/
+
+# VRP scratch / sensitive — private bug-hunt working directory, never push
+starnix_vrp_kit/
+starnix_vrp_kit.zip
+starnix_vrp_proof_kit/
+starnix_vrp_proof_kit.zip
+fuchsia_ai_extract/
+
+# One-off debug / scratch scripts
+dump_prompt.jl
+change_to_local*.jl
+
+# Worktrees
+.claude/worktrees/

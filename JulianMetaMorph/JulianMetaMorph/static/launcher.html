@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Julian MetaMorph</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#07070f;--surface:#0c0c1c;--glass:rgba(12,12,28,0.92);
+  --border:rgba(80,80,160,0.22);--border-active:rgba(176,96,255,0.4);
+  --green:#00ff99;--blue:#4fc3f7;--pink:#ff4fa0;--orange:#ff9500;
+  --purple:#b060ff;--dim:#666;--text:#d0d0e8;--red:#f44;
+  --yellow:#ffd54f;--cyan:#00e5ff;
+  --radius:8px;
+}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI','Inter',system-ui,sans-serif;font-size:13px;min-height:100vh;display:flex;flex-direction:column;}
+a{color:var(--blue);text-decoration:none;}
+a:hover{text-decoration:underline;}
+code,pre,.mono{font-family:'Cascadia Code','Fira Code','Consolas',monospace;}
+
+/* ── SCROLLBARS ── */
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:#1e1e3a;border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:#2e2e5a;}
+
+/* ── HEADER ── */
+#header{
+  display:flex;align-items:center;gap:16px;padding:10px 20px;
+  background:rgba(8,8,20,0.97);border-bottom:1px solid var(--border);flex-shrink:0;
+}
+#logo{font-size:15px;font-weight:700;color:var(--purple);letter-spacing:3px;font-family:'Cascadia Code','Fira Code',monospace;}
+#logo span{color:var(--pink);}
+.status-pill{
+  display:flex;align-items:center;gap:6px;padding:3px 10px;
+  border-radius:12px;font-size:10px;letter-spacing:1px;
+  border:1px solid var(--border);
+}
+.status-pill.up{border-color:rgba(0,255,153,0.3);color:var(--green);}
+.status-pill.down{border-color:rgba(255,68,68,0.3);color:var(--red);}
+.status-pill.up .dot{background:var(--green);box-shadow:0 0 6px var(--green);}
+.status-pill.down .dot{background:var(--red);box-shadow:0 0 6px var(--red);}
+.dot{width:6px;height:6px;border-radius:50%;transition:0.3s;}
+#quarry-stats{margin-left:auto;display:flex;gap:16px;font-size:11px;color:var(--dim);}
+.q-stat{display:flex;align-items:center;gap:4px;}
+.q-stat b{color:var(--blue);font-size:13px;}
+.hdr-btn{
+  cursor:pointer;font-size:10px;color:var(--dim);padding:4px 10px;
+  border:1px solid var(--border);border-radius:var(--radius);background:none;
+  transition:0.15s;font-family:inherit;letter-spacing:1px;
+}
+.hdr-btn:hover{color:var(--blue);border-color:var(--blue);}
+
+/* ── LAYOUT ── */
+#main{display:flex;flex:1;overflow:hidden;}
+
+/* ── SIDEBAR ── */
+#sidebar{
+  width:180px;flex-shrink:0;border-right:1px solid var(--border);
+  display:flex;flex-direction:column;background:rgba(6,6,18,0.7);
+  padding:8px 0;
+}
+.nav-item{
+  padding:10px 16px;cursor:pointer;font-size:11px;letter-spacing:0.5px;
+  color:var(--dim);border-left:3px solid transparent;transition:0.15s;
+  display:flex;align-items:center;gap:8px;
+}
+.nav-item:hover{color:var(--text);background:rgba(80,80,180,0.08);}
+.nav-item.active{color:var(--purple);border-left-color:var(--purple);background:rgba(176,96,255,0.07);font-weight:600;}
+.nav-icon{font-size:14px;width:20px;text-align:center;}
+.nav-divider{height:1px;background:var(--border);margin:8px 16px;}
+#sidebar-footer{margin-top:auto;padding:12px 16px;font-size:9px;color:#2a2a3a;letter-spacing:1px;border-top:1px solid rgba(20,20,50,0.5);}
+
+/* ── CONTENT ── */
+#content{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px;}
+.page{display:none;flex-direction:column;gap:16px;animation:fadeIn 0.2s ease;}
+.page.active{display:flex;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+/* ── PANEL ── */
+.panel{background:var(--glass);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+.panel-hdr{
+  padding:10px 16px;border-bottom:1px solid var(--border);
+  font-size:11px;font-weight:600;letter-spacing:1.5px;
+  display:flex;align-items:center;gap:10px;text-transform:uppercase;
+}
+.panel-body{padding:16px;}
+
+/* ── INPUTS ── */
+input[type=text],input[type=number],select{
+  background:rgba(0,0,0,0.4);border:1px solid var(--border);color:var(--text);
+  font-family:inherit;font-size:12px;padding:8px 12px;border-radius:6px;outline:none;transition:0.2s;
+}
+input[type=text]:focus,input[type=number]:focus,select:focus{border-color:var(--purple);box-shadow:0 0 0 2px rgba(176,96,255,0.1);}
+input::placeholder{color:#444;}
+input[type=number]{width:80px;}
+
+/* ── BUTTONS ── */
+.btn{
+  cursor:pointer;padding:8px 20px;border-radius:6px;font-family:inherit;
+  font-size:11px;letter-spacing:1px;font-weight:600;transition:all 0.15s;
+  white-space:nowrap;border:1px solid;display:inline-flex;align-items:center;gap:6px;
+}
+.btn:disabled{opacity:0.3;cursor:not-allowed;}
+.btn-purple{background:rgba(176,96,255,0.15);border-color:var(--purple);color:var(--purple);}
+.btn-purple:hover:not(:disabled){background:rgba(176,96,255,0.3);box-shadow:0 0 16px rgba(176,96,255,0.15);}
+.btn-blue{background:rgba(79,195,247,0.12);border-color:var(--blue);color:var(--blue);}
+.btn-blue:hover:not(:disabled){background:rgba(79,195,247,0.25);}
+.btn-green{background:rgba(0,255,153,0.1);border-color:var(--green);color:var(--green);}
+.btn-green:hover:not(:disabled){background:rgba(0,255,153,0.22);}
+.btn-orange{background:rgba(255,149,0,0.1);border-color:var(--orange);color:var(--orange);}
+.btn-orange:hover:not(:disabled){background:rgba(255,149,0,0.22);}
+.btn-pink{background:rgba(255,79,160,0.1);border-color:var(--pink);color:var(--pink);}
+.btn-pink:hover:not(:disabled){background:rgba(255,79,160,0.22);}
+.btn-red{background:rgba(255,68,68,0.1);border-color:var(--red);color:var(--red);}
+.btn-red:hover:not(:disabled){background:rgba(255,68,68,0.22);}
+
+/* ── HUNT PANEL ── */
+#hunt-panel{border-color:var(--border-active);}
+#hunt-panel .panel-hdr{color:var(--purple);background:rgba(176,96,255,0.04);}
+#hunt-input{
+  width:100%;font-size:14px;padding:12px 16px;
+  border-color:rgba(176,96,255,0.3);
+}
+#hunt-input:focus{border-color:var(--purple);box-shadow:0 0 16px rgba(176,96,255,0.1);}
+.hunt-opts{display:flex;gap:14px;margin-top:12px;align-items:flex-end;flex-wrap:wrap;}
+.hunt-opts .field{display:flex;flex-direction:column;gap:5px;}
+.hunt-opts label{font-size:9px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;font-weight:600;}
+.field{display:flex;flex-direction:column;gap:5px;flex:1;}
+.field label{font-size:9px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;font-weight:600;}
+
+/* ── PROGRESS ── */
+#hunt-progress{display:none;margin-top:14px;font-size:11px;color:var(--dim);line-height:2;}
+#hunt-progress.visible{display:block;}
+.prog-line{padding:2px 0;font-family:'Cascadia Code',monospace;font-size:11px;}
+.prog-line.done{color:var(--green);}
+.prog-line.active{color:var(--purple);}
+.prog-line.info{color:var(--blue);}
+
+/* ── HUNT RESULTS ── */
+#hunt-results{display:none;flex-direction:column;gap:14px;}
+#hunt-results.visible{display:flex;}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;}
+.stat-box{
+  background:rgba(0,0,0,0.25);border:1px solid var(--border);
+  border-radius:var(--radius);padding:14px 18px;text-align:center;
+}
+.stat-val{font-size:28px;font-weight:700;color:var(--purple);font-family:'Cascadia Code',monospace;}
+.stat-lbl{font-size:9px;letter-spacing:1.5px;color:var(--dim);margin-top:4px;text-transform:uppercase;font-weight:600;}
+
+/* ── VRP DASHBOARD ── */
+.vrp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;}
+.vrp-card{
+  background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:var(--radius);
+  padding:14px 16px;transition:0.15s;cursor:pointer;
+}
+.vrp-card:hover{border-color:var(--purple);background:rgba(176,96,255,0.04);}
+.vrp-card-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.vrp-severity{
+  font-size:9px;font-weight:700;letter-spacing:1px;padding:2px 8px;
+  border-radius:4px;text-transform:uppercase;
+}
+.sev-critical{background:rgba(255,68,68,0.15);color:var(--red);border:1px solid rgba(255,68,68,0.3);}
+.sev-high{background:rgba(255,149,0,0.12);color:var(--orange);border:1px solid rgba(255,149,0,0.3);}
+.sev-standard{background:rgba(79,195,247,0.1);color:var(--blue);border:1px solid rgba(79,195,247,0.3);}
+.sev-info{background:rgba(102,102,102,0.1);color:var(--dim);border:1px solid rgba(102,102,102,0.3);}
+.vrp-cat{font-size:12px;font-weight:600;color:var(--text);}
+.vrp-count{margin-left:auto;font-size:18px;font-weight:700;color:var(--purple);font-family:'Cascadia Code',monospace;}
+.vrp-files{font-size:10px;color:var(--dim);line-height:1.8;}
+.vrp-file{color:var(--green);font-family:'Cascadia Code',monospace;font-size:10px;}
+.vrp-symbols{font-size:9px;color:var(--dim);margin-top:4px;}
+.vrp-symbols code{color:var(--cyan);background:rgba(0,229,255,0.06);padding:1px 4px;border-radius:2px;}
+
+/* ── HIT CARDS ── */
+.hit-card{
+  background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px 16px;margin-bottom:8px;transition:0.15s;
+}
+.hit-card:hover{border-color:rgba(80,80,160,0.4);}
+.hit-card:last-child{margin-bottom:0;}
+.hit-num{color:var(--dim);font-size:9px;font-weight:600;letter-spacing:1px;}
+.hit-repo{color:var(--blue);font-size:12px;font-weight:600;margin:4px 0 2px;}
+.hit-path{color:var(--green);font-size:11px;font-family:'Cascadia Code',monospace;margin-bottom:8px;}
+.hit-meta{display:flex;gap:8px;font-size:10px;color:var(--dim);margin-bottom:8px;flex-wrap:wrap;align-items:center;}
+.hit-preview{
+  background:rgba(0,0,0,0.35);border-radius:6px;padding:10px 12px;
+  font-size:11px;color:#8888aa;white-space:pre-wrap;word-break:break-word;
+  max-height:140px;overflow-y:auto;font-family:'Cascadia Code',monospace;
+  line-height:1.6;
+}
+.hit-why{font-size:10px;color:var(--dim);margin-top:6px;line-height:1.5;padding:6px 8px;background:rgba(176,96,255,0.04);border-radius:4px;border-left:2px solid var(--purple);}
+
+/* ── TAGS ── */
+.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:9px;letter-spacing:0.5px;font-weight:600;}
+.tag-cat{background:rgba(79,195,247,0.1);color:var(--blue);}
+.tag-subcat{background:rgba(255,149,0,0.08);color:var(--orange);}
+.tag-lang{background:rgba(0,255,153,0.06);color:var(--green);}
+.tag-lic{background:rgba(176,96,255,0.08);color:var(--purple);}
+.tag-score{background:rgba(255,213,79,0.08);color:var(--yellow);}
+
+/* ── FINDINGS TREE ── */
+#findings-layout{display:flex;gap:14px;height:calc(100vh - 120px);min-height:400px;}
+#findings-tree-panel{width:300px;flex-shrink:0;display:flex;flex-direction:column;}
+#findings-detail-panel{flex:1;display:flex;flex-direction:column;min-width:0;}
+#tree-container{flex:1;overflow-y:auto;padding:10px;}
+#detail-container{flex:1;overflow-y:auto;padding:0;}
+
+.tree-node{
+  cursor:pointer;padding:5px 10px;border-radius:4px;transition:0.12s;
+  display:flex;align-items:center;gap:6px;user-select:none;font-size:11px;
+}
+.tree-node:hover{background:rgba(80,80,180,0.1);}
+.tree-node.selected{background:rgba(176,96,255,0.12);border-left:2px solid var(--purple);}
+.tree-children{padding-left:18px;border-left:1px solid rgba(80,80,160,0.12);margin-left:8px;}
+.tree-toggle{font-size:8px;color:var(--dim);flex-shrink:0;width:12px;text-align:center;}
+.tree-icon{flex-shrink:0;font-size:12px;}
+.tree-label{letter-spacing:0.3px;line-height:1.5;}
+.tree-meta{font-size:9px;color:var(--dim);margin-left:auto;white-space:nowrap;font-weight:600;}
+.node-hunt>.tree-label{color:var(--purple);font-weight:700;letter-spacing:1px;}
+.node-category>.tree-label{color:var(--blue);font-weight:600;text-transform:uppercase;font-size:9px;letter-spacing:1.5px;}
+.node-subcategory>.tree-label{color:var(--orange);font-size:10px;}
+.node-finding>.tree-label{color:var(--text);font-family:'Cascadia Code',monospace;font-size:10px;}
+.node-finding.selected>.tree-label{color:var(--purple);}
+
+/* ── DETAIL VIEW ── */
+#detail-empty{padding:60px 40px;text-align:center;color:var(--dim);font-size:12px;letter-spacing:1px;}
+.detail-hero{padding:16px;border-bottom:1px solid var(--border);}
+.detail-path{font-size:14px;color:var(--blue);font-weight:600;margin-bottom:4px;word-break:break-all;font-family:'Cascadia Code',monospace;}
+.detail-repo{font-size:11px;color:var(--dim);margin-bottom:12px;}
+.detail-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+.detail-explanation{
+  margin:14px 16px;padding:14px 16px;
+  background:rgba(176,96,255,0.04);border:1px solid rgba(176,96,255,0.15);
+  border-radius:6px;font-size:12px;line-height:1.7;color:var(--text);
+}
+.expl-label{font-size:9px;letter-spacing:2px;color:var(--purple);margin-bottom:8px;text-transform:uppercase;font-weight:700;}
+.detail-symbols{margin:0 16px 14px;display:flex;flex-wrap:wrap;gap:6px;}
+.sym-chip{background:rgba(0,229,255,0.06);border:1px solid rgba(0,229,255,0.15);border-radius:4px;padding:3px 8px;font-size:10px;color:var(--cyan);font-family:'Cascadia Code',monospace;}
+.detail-code{margin:0 16px 16px;}
+.code-label{font-size:9px;letter-spacing:2px;color:var(--dim);margin-bottom:6px;text-transform:uppercase;font-weight:700;}
+.hljs{border-radius:6px;font-size:11px;line-height:1.5;max-height:400px;overflow-y:auto;}
+
+/* ── PUSH BAR ── */
+#push-bar{display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid var(--border);}
+
+/* ── REPO CARDS ── */
+.repo-card{
+  display:flex;align-items:flex-start;gap:12px;padding:12px 16px;
+  background:rgba(0,0,0,0.2);border:1px solid var(--border);
+  border-radius:var(--radius);margin-bottom:8px;transition:0.15s;
+}
+.repo-card:hover{border-color:rgba(80,80,160,0.4);}
+.repo-card:last-child{margin-bottom:0;}
+.rc-info{flex:1;}
+.rc-name{color:var(--blue);font-size:12px;font-weight:600;}
+.rc-desc{color:var(--dim);font-size:11px;margin-top:4px;line-height:1.5;}
+.rc-meta{display:flex;gap:12px;font-size:10px;color:#444;margin-top:6px;}
+.rc-stars{color:var(--orange);}
+.ingest-inline{
+  flex-shrink:0;cursor:pointer;padding:6px 12px;border-radius:6px;
+  font-family:inherit;font-size:10px;letter-spacing:0.5px;font-weight:600;
+  border:1px solid var(--green);color:var(--green);background:rgba(0,255,153,0.07);transition:0.15s;
+}
+.ingest-inline:hover{background:rgba(0,255,153,0.18);}
+
+/* ── MISC ── */
+.repo-ingested{
+  display:flex;align-items:center;gap:12px;padding:8px 14px;
+  background:rgba(0,0,0,0.2);border:1px solid var(--border);
+  border-radius:6px;margin-bottom:6px;font-size:11px;
+}
+.ri-name{color:var(--blue);flex:1;font-weight:600;}
+.ri-files{color:var(--green);font-family:'Cascadia Code',monospace;}
+.ri-lic{color:var(--dim);}
+.result-hdr{padding:10px 16px;border-bottom:1px solid var(--border);font-size:11px;letter-spacing:1.5px;font-weight:600;display:flex;align-items:center;justify-content:space-between;text-transform:uppercase;}
+.result-body{padding:14px;max-height:500px;overflow-y:auto;}
+.empty{color:var(--dim);font-size:12px;padding:30px;text-align:center;letter-spacing:0.5px;}
+.spinner{display:inline-block;width:12px;height:12px;border:2px solid #2a2a4a;border-top-color:var(--purple);border-radius:50%;animation:spin 0.6s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+#toast{
+  position:fixed;bottom:20px;right:20px;background:rgba(10,10,24,0.97);
+  border:1px solid var(--border);border-radius:var(--radius);padding:10px 18px;
+  font-size:11px;letter-spacing:0.5px;color:var(--text);opacity:0;
+  transition:opacity 0.2s;pointer-events:none;z-index:999;
+  backdrop-filter:blur(8px);box-shadow:0 4px 20px rgba(0,0,0,0.4);
+}
+#toast.show{opacity:1;}
+.queries-used{font-size:10px;color:var(--dim);margin-top:12px;line-height:1.8;}
+.queries-used span{color:var(--blue);margin-right:6px;font-family:'Cascadia Code',monospace;}
+.adv-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;}
+.adv-row:last-child{margin-bottom:0;}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════ HEADER -->
+<div id="header">
+  <span id="logo">JULIAN <span>META</span>MORPH</span>
+  <div class="status-pill down" id="status-pill">
+    <span class="dot"></span>
+    <span id="status-txt">CHECKING</span>
+  </div>
+  <div id="quarry-stats">
+    <div class="q-stat"><b id="q-repos">-</b> repos</div>
+    <div class="q-stat"><b id="q-files">-</b> files</div>
+    <div class="q-stat"><b id="q-findings">-</b> findings</div>
+  </div>
+  <button class="hdr-btn" onclick="checkHealth()">Refresh</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ MAIN -->
+<div id="main">
+  <div id="sidebar">
+    <div class="nav-item active" onclick="showPage('dashboard')" id="nav-dashboard"><span class="nav-icon">&#9670;</span> Dashboard</div>
+    <div class="nav-item" onclick="showPage('hunt')" id="nav-hunt"><span class="nav-icon">&#9889;</span> Hunt</div>
+    <div class="nav-item" onclick="showPage('findings')" id="nav-findings"><span class="nav-icon">&#9776;</span> Findings</div>
+    <div class="nav-divider"></div>
+    <div class="nav-item" onclick="showPage('search')" id="nav-search"><span class="nav-icon">&#128269;</span> Search</div>
+    <div class="nav-item" onclick="showPage('ingest')" id="nav-ingest"><span class="nav-icon">&#8615;</span> Ingest</div>
+    <div class="nav-item" onclick="showPage('scout')" id="nav-scout"><span class="nav-icon">&#128225;</span> Scout</div>
+    <div class="nav-item" onclick="showPage('forge')" id="nav-forge"><span class="nav-icon">&#9874;</span> Forge</div>
+    <div id="sidebar-footer">v0.3.0 VRP Edition</div>
+  </div>
+
+  <div id="content">
+
+    <!-- ══ DASHBOARD PAGE ══ -->
+    <div class="page active" id="page-dashboard">
+      <div class="panel">
+        <div class="panel-hdr" style="color:var(--purple);">VRP ATTACK SURFACE DASHBOARD</div>
+        <div class="panel-body">
+          <div class="summary-grid" id="dash-stats">
+            <div class="stat-box"><div class="stat-val" id="ds-repos">-</div><div class="stat-lbl">Repos</div></div>
+            <div class="stat-box"><div class="stat-val" id="ds-files">-</div><div class="stat-lbl">Files Indexed</div></div>
+            <div class="stat-box"><div class="stat-val" id="ds-findings">-</div><div class="stat-lbl">VRP Findings</div></div>
+            <div class="stat-box"><div class="stat-val" id="ds-categories">-</div><div class="stat-lbl">Categories</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-hdr" style="color:var(--orange);">
+          FINDINGS BY CATEGORY
+          <button class="hdr-btn" style="margin-left:auto;" onclick="loadDashboard()">Refresh</button>
+        </div>
+        <div class="panel-body" id="dash-vrp-grid">
+          <div class="empty">Loading VRP findings...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ HUNT PAGE ══ -->
+    <div class="page" id="page-hunt">
+      <div class="panel" id="hunt-panel">
+        <div class="panel-hdr">HUNT - Give me a task, I'll raid GitHub and bring back the goods</div>
+        <div class="panel-body">
+          <input type="text" id="hunt-input" placeholder='e.g. "zircon handle lifecycle" or "starnix syscall translation"'>
+          <div class="hunt-opts">
+            <div class="field"><label>Repos to raid</label><input type="number" id="hunt-repos" value="5" min="1" max="15"></div>
+            <div class="field"><label>Files/repo</label><input type="number" id="hunt-files" value="40" min="5" max="200"></div>
+            <div class="field"><label>Max hits</label><input type="number" id="hunt-hits" value="10" min="1" max="30"></div>
+            <button class="btn btn-purple" id="hunt-btn" onclick="runHunt()" style="margin-left:auto;">&#9889; HUNT</button>
+          </div>
+          <div id="hunt-progress"></div>
+        </div>
+      </div>
+      <div id="hunt-results">
+        <div class="panel">
+          <div class="panel-hdr" style="color:var(--purple)">HUNT SUMMARY</div>
+          <div class="panel-body">
+            <div class="summary-grid">
+              <div class="stat-box"><div class="stat-val" id="hs-repos">0</div><div class="stat-lbl">Repos Raided</div></div>
+              <div class="stat-box"><div class="stat-val" id="hs-files">0</div><div class="stat-lbl">Files Ingested</div></div>
+              <div class="stat-box"><div class="stat-val" id="hs-hits">0</div><div class="stat-lbl">Code Hits</div></div>
+            </div>
+            <div class="queries-used" id="hs-queries"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-hdr" style="color:var(--green)">REPOS INGESTED</div>
+          <div class="panel-body" id="hs-repos-list"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-hdr" style="color:var(--blue)">
+            CODE HITS <span id="hs-hit-count" style="color:var(--dim);font-size:9px;margin-left:8px;"></span>
+            <button class="hdr-btn" style="margin-left:auto;" onclick="showPage('findings');loadFindings()">View Tree</button>
+          </div>
+          <div class="panel-body" id="hs-hits-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ FINDINGS TREE PAGE ══ -->
+    <div class="page" id="page-findings">
+      <div class="panel" style="flex-shrink:0;">
+        <div class="panel-hdr" style="color:var(--purple)">
+          FINDINGS TREE
+          <select id="hunt-filter" style="margin-left:auto;font-size:10px;padding:4px 8px;" onchange="loadFindings()">
+            <option value="">All hunts</option>
+          </select>
+          <button class="hdr-btn" onclick="loadFindings()">Refresh</button>
+        </div>
+      </div>
+      <div id="findings-layout">
+        <div class="panel" id="findings-tree-panel">
+          <div class="panel-hdr" style="color:var(--blue);">TREE <span id="tree-count" style="color:var(--dim);font-size:9px;margin-left:6px;"></span></div>
+          <div id="tree-container"></div>
+        </div>
+        <div class="panel" id="findings-detail-panel" style="display:flex;flex-direction:column;">
+          <div class="panel-hdr" style="color:var(--blue);">
+            DETAIL
+            <span id="detail-title" style="color:var(--dim);font-size:9px;margin-left:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px;"></span>
+          </div>
+          <div id="detail-container">
+            <div id="detail-empty">Select a finding from the tree to view details</div>
+            <div id="detail-content" style="display:none;"></div>
+          </div>
+          <div id="push-bar">
+            <input type="text" id="push-repo-input" value="sparkbyte-engine-findings" style="max-width:240px;">
+            <button class="btn btn-green" id="push-btn" onclick="pushFindings()">Push to GitHub</button>
+            <span id="push-result" style="font-size:10px;color:var(--dim);"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ SEARCH PAGE ══ -->
+    <div class="page" id="page-search">
+      <div class="panel">
+        <div class="panel-hdr" style="color:var(--blue)">SEARCH GITHUB REPOS</div>
+        <div class="panel-body">
+          <div class="adv-row">
+            <div class="field"><label>Query</label><input type="text" id="search-q" placeholder="e.g. fuchsia zircon driver" onkeydown="if(event.key==='Enter')runSearch()"></div>
+            <button class="btn btn-blue" onclick="runSearch()">Search</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel" style="flex:1;">
+        <div class="result-hdr"><span style="color:var(--blue)">Results</span><span id="search-count" style="color:var(--dim);font-size:9px;"></span></div>
+        <div class="result-body" id="search-body"><div class="empty">Run a search to see repos.</div></div>
+      </div>
+    </div>
+
+    <!-- ══ INGEST PAGE ══ -->
+    <div class="page" id="page-ingest">
+      <div class="panel">
+        <div class="panel-hdr" style="color:var(--green)">INGEST SPECIFIC REPO</div>
+        <div class="panel-body">
+          <div class="adv-row">
+            <div class="field"><label>Repo (owner/name)</label><input type="text" id="ingest-repo" placeholder="e.g. nickvdp/zircon"></div>
+            <div class="field" style="flex:0;"><label>Max Files</label><input type="number" id="ingest-max" value="60" min="1" max="500"></div>
+            <button class="btn btn-green" onclick="runIngest()">Ingest</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel" id="ingest-result-panel" style="display:none;">
+        <div class="panel-hdr" style="color:var(--green)">INGEST RESULT</div>
+        <div class="panel-body" id="ingest-result-body"></div>
+      </div>
+    </div>
+
+    <!-- ══ SCOUT PAGE ══ -->
+    <div class="page" id="page-scout">
+      <div class="panel">
+        <div class="panel-hdr" style="color:var(--orange)">SCOUT EXISTING QUARRY</div>
+        <div class="panel-body">
+          <div class="adv-row">
+            <div class="field"><label>Task</label><input type="text" id="scout-task" placeholder="e.g. vmo create map permissions" onkeydown="if(event.key==='Enter')runScout()"></div>
+            <div class="field" style="flex:0;"><label>Limit</label><input type="number" id="scout-limit" value="8" min="1" max="30"></div>
+            <button class="btn btn-orange" onclick="runScout()">Scout</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel" style="flex:1;">
+        <div class="result-hdr"><span style="color:var(--orange)">Hits</span><span id="scout-count" style="color:var(--dim);font-size:9px;"></span></div>
+        <div class="result-body" id="scout-body"><div class="empty">Scout a task to search existing quarry.</div></div>
+      </div>
+    </div>
+
+    <!-- ══ FORGE PAGE ══ -->
+    <div class="page" id="page-forge">
+      <div class="panel">
+        <div class="panel-hdr" style="color:var(--pink)">FORGE SKILL MODULE</div>
+        <div class="panel-body">
+          <div class="adv-row">
+            <div class="field" style="flex:0;min-width:160px;"><label>Skill Name</label><input type="text" id="forge-name" placeholder="e.g. vmo_scanner"></div>
+            <div class="field"><label>Task Description</label><input type="text" id="forge-task" placeholder="e.g. scan VMO operations for permission bypass"></div>
+          </div>
+          <div class="adv-row">
+            <div class="field"><label>Output Dir</label><input type="text" id="forge-out" value="skills"></div>
+            <button class="btn btn-pink" onclick="runForge()">Forge</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel" id="forge-result-panel" style="display:none;">
+        <div class="panel-hdr" style="color:var(--pink)">FORGED SKILL</div>
+        <div class="panel-body" id="forge-result-body"></div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<div id="toast"></div>
+
+<script>
+// ── Auto-detect API port ──
+const API = location.origin;
+let _currentHuntId = null;
+
+// ── HELPERS ──
+function el(id){ return document.getElementById(id); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+let _tt;
+function toast(msg, color){
+  const t = el('toast'); t.textContent = msg; t.style.color = color || 'var(--text)';
+  t.classList.add('show'); clearTimeout(_tt); _tt = setTimeout(() => t.classList.remove('show'), 3500);
+}
+function log(container, msg, cls){
+  const d = document.createElement('div');
+  d.className = 'prog-line' + (cls ? ' ' + cls : '');
+  d.textContent = msg; container.appendChild(d);
+}
+
+// ── NAV ──
+function showPage(name){
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const page = el('page-' + name);
+  const nav = el('nav-' + name);
+  if(page) page.classList.add('active');
+  if(nav) nav.classList.add('active');
+  // Auto-load data for certain pages
+  if(name === 'findings') loadFindings();
+  if(name === 'dashboard') loadDashboard();
+}
+
+// ── HEALTH ──
+async function checkHealth(){
+  const pill = el('status-pill'), txt = el('status-txt');
+  try {
+    const r = await fetch(API + '/health');
+    const d = await r.json();
+    pill.className = 'status-pill up';
+    txt.textContent = 'ONLINE';
+    el('q-repos').textContent = d.quarry.repos;
+    el('q-files').textContent = d.quarry.files.toLocaleString();
+    el('q-findings').textContent = d.quarry.findings || 0;
+  } catch(e) {
+    pill.className = 'status-pill down';
+    txt.textContent = 'OFFLINE';
+  }
+}
+
+// ── DASHBOARD ──
+async function loadDashboard(){
+  try {
+    // Get health stats
+    const hr = await fetch(API + '/health');
+    const hd = await hr.json();
+    el('ds-repos').textContent = hd.quarry.repos;
+    el('ds-files').textContent = hd.quarry.files.toLocaleString();
+    el('ds-findings').textContent = hd.quarry.findings || 0;
+
+    // Get findings tree to build category breakdown
+    const fr = await fetch(API + '/findings/tree');
+    const fd = await fr.json();
+    const nodes = fd.nodes || [];
+
+    // Group findings by category
+    const categories = {};
+    const findings = nodes.filter(n => n.node_type === 'finding');
+    el('ds-categories').textContent = new Set(findings.map(f => f.category)).size;
+
+    findings.forEach(f => {
+      const key = f.category + '/' + f.subcategory;
+      if(!categories[key]) categories[key] = { category: f.category, subcategory: f.subcategory, findings: [] };
+      categories[key].findings.push(f);
+    });
+
+    const vrpPriority = {
+      'vrp_sandbox': { order: 0, severity: 'critical', label: 'Sandbox Escape' },
+      'vrp_starnix': { order: 1, severity: 'high', label: 'Starnix Translation' },
+      'vrp_zircon':  { order: 2, severity: 'high', label: 'Zircon Kernel' },
+      'vrp_fidl':    { order: 3, severity: 'high', label: 'FIDL Protocol' },
+      'vrp_memory':  { order: 4, severity: 'standard', label: 'Memory Safety' },
+      'vrp_concurrency': { order: 5, severity: 'standard', label: 'Concurrency' },
+      'vrp_driver':  { order: 6, severity: 'standard', label: 'Driver Surface' },
+      'vrp_network': { order: 7, severity: 'standard', label: 'Network Stack' },
+    };
+
+    const sorted = Object.values(categories).sort((a, b) => {
+      const pa = vrpPriority[a.category]?.order ?? 99;
+      const pb = vrpPriority[b.category]?.order ?? 99;
+      return pa - pb || b.findings.length - a.findings.length;
+    });
+
+    if(!sorted.length){
+      el('dash-vrp-grid').innerHTML = '<div class="empty">No findings yet. Run a Hunt or VRP Bug Hunt to populate.</div>';
+      return;
+    }
+
+    el('dash-vrp-grid').innerHTML = '<div class="vrp-grid">' + sorted.map(cat => {
+      const meta = vrpPriority[cat.category] || { severity: 'info', label: cat.category };
+      const sevClass = 'sev-' + meta.severity;
+      const fileList = cat.findings.slice(0, 4).map(f =>
+        `<div><span class="vrp-file">${esc(f.file_path || f.label)}</span></div>`
+      ).join('');
+      const topSymbols = [...new Set(cat.findings.flatMap(f => (f.symbols || []).slice(0, 3)))].slice(0, 6);
+      const symHtml = topSymbols.length ? topSymbols.map(s => `<code>${esc(s)}</code>`).join(' ') : '';
+
+      return `<div class="vrp-card" onclick="showPage('findings');loadFindings()">
+        <div class="vrp-card-hdr">
+          <span class="vrp-severity ${sevClass}">${meta.severity}</span>
+          <span class="vrp-cat">${esc(cat.subcategory || meta.label)}</span>
+          <span class="vrp-count">${cat.findings.length}</span>
+        </div>
+        <div class="vrp-files">${fileList}${cat.findings.length > 4 ? `<div style="color:var(--dim)">+${cat.findings.length - 4} more</div>` : ''}</div>
+        ${symHtml ? `<div class="vrp-symbols">${symHtml}</div>` : ''}
+      </div>`;
+    }).join('') + '</div>';
+
+  } catch(e) {
+    el('dash-vrp-grid').innerHTML = `<div class="empty" style="color:var(--red)">Failed to load: ${esc(String(e))}</div>`;
+  }
+}
+
+// ── HUNT ──
+async function runHunt(){
+  const task = el('hunt-input').value.trim();
+  if(!task){ toast('Enter a task description', 'var(--red)'); return; }
+  const repo_limit = parseInt(el('hunt-repos').value) || 5;
+  const files_per_repo = parseInt(el('hunt-files').value) || 40;
+  const hit_limit = parseInt(el('hunt-hits').value) || 10;
+
+  const btn = el('hunt-btn'); btn.disabled = true; btn.textContent = 'HUNTING...';
+  el('hunt-results').classList.remove('visible');
+  const prog = el('hunt-progress'); prog.innerHTML = ''; prog.classList.add('visible');
+  log(prog, 'Deriving search queries...', 'active');
+
+  try {
+    const r = await fetch(API + '/hunt', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task, repo_limit, files_per_repo, hit_limit })});
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    _currentHuntId = d.hunt_id;
+
+    prog.innerHTML = '';
+    log(prog, 'Queries: ' + d.queries_used.map(q => `"${q}"`).join(' | '), 'info');
+    log(prog, 'Raided ' + d.repos_ingested.length + ' repos', 'done');
+    const totalFiles = d.repos_ingested.reduce((s, r) => s + (r?.ingested_files || 0), 0);
+    log(prog, 'Ingested ' + totalFiles + ' files', 'done');
+    log(prog, 'Found ' + d.hits.length + ' hits', 'done');
+
+    el('hs-repos').textContent = d.repos_ingested.length;
+    el('hs-files').textContent = totalFiles;
+    el('hs-hits').textContent = d.hits.length;
+    el('hs-queries').innerHTML = 'Queries: ' + d.queries_used.map(q => `<span>"${esc(q)}"</span>`).join(' ');
+
+    el('hs-repos-list').innerHTML = d.repos_ingested.length ? d.repos_ingested.filter(Boolean).map(r => `
+      <div class="repo-ingested">
+        <span class="ri-name">${esc(r.repo || '?')}</span>
+        <span class="ri-files">${r.ingested_files || 0} files</span>
+        <span class="ri-lic">${esc(r.license || '?')}</span>
+      </div>`).join('') : '<div class="empty">No repos ingested.</div>';
+
+    el('hs-hit-count').textContent = d.hits.length + ' hits';
+    el('hs-hits-list').innerHTML = d.hits.length ? d.hits.map((h, i) => renderHitCard(h, i)).join('') : '<div class="empty">No hits found.</div>';
+    el('hunt-results').classList.add('visible');
+    checkHealth();
+  } catch(e) {
+    prog.innerHTML = ''; log(prog, 'Hunt failed: ' + String(e), '');
+    toast('Hunt failed: ' + String(e), 'var(--red)');
+  } finally { btn.disabled = false; btn.textContent = '⚡ HUNT'; }
+}
+
+function renderHitCard(h, i){
+  return `<div class="hit-card">
+    <div class="hit-num">#${i + 1}</div>
+    <div class="hit-repo">${esc(h.repo_full_name)}</div>
+    <div class="hit-path">${esc(h.path)}</div>
+    <div class="hit-meta">
+      <span class="tag tag-lang">${esc(h.language || '?')}</span>
+      <span class="tag tag-lic">${esc(h.license_spdx || '?')}</span>
+      <span class="tag tag-score">score: ${(h.score || 0).toFixed(2)}</span>
+    </div>
+    ${h.preview ? `<div class="hit-preview">${esc(h.preview)}</div>` : ''}
+    ${h.why ? `<div class="hit-why">${esc(h.why)}</div>` : ''}
+  </div>`;
+}
+
+// ── FINDINGS TREE ──
+let _findingsNodes = [];
+let _expandedNodes = new Set();
+let _selectedNode = null;
+
+async function loadFindings(){
+  const filterEl = el('hunt-filter');
+  const huntId = filterEl.value || null;
+
+  try {
+    const h = await fetch(API + '/findings/hunts');
+    const hd = await h.json();
+    const cur = filterEl.value;
+    filterEl.innerHTML = '<option value="">All hunts</option>';
+    (hd.hunts || []).forEach(hunt => {
+      const opt = document.createElement('option');
+      opt.value = hunt.hunt_id;
+      opt.textContent = `${hunt.hunt_id} - ${hunt.task.slice(0, 30)} (${hunt.finding_count})`;
+      if(hunt.hunt_id === cur) opt.selected = true;
+      filterEl.appendChild(opt);
+    });
+  } catch(e) {}
+
+  const url = huntId ? `${API}/findings/tree?hunt_id=${encodeURIComponent(huntId)}` : `${API}/findings/tree`;
+  const container = el('tree-container');
+  container.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  try {
+    const r = await fetch(url);
+    const d = await r.json();
+    _findingsNodes = d.nodes || [];
+    el('tree-count').textContent = _findingsNodes.filter(n => n.node_type === 'finding').length + ' findings';
+    renderTree();
+  } catch(e) {
+    container.innerHTML = `<div class="empty" style="color:var(--red)">${esc(String(e))}</div>`;
+  }
+}
+
+function renderTree(){
+  const container = el('tree-container');
+  const byParent = {};
+  _findingsNodes.forEach(n => {
+    const p = n.parent_id || 'root';
+    if(!byParent[p]) byParent[p] = [];
+    byParent[p].push(n);
+  });
+
+  function buildNode(node){
+    const children = byParent[node.id] || [];
+    const hasChildren = children.length > 0;
+    const isExpanded = _expandedNodes.has(node.id) || node.node_type === 'hunt' || node.node_type === 'category';
+    const isSelected = _selectedNode === node.id;
+    const icons = { hunt: '◆', category: '▸', subcategory: '▫', finding: '•' };
+
+    const div = document.createElement('div');
+    div.style.marginBottom = '1px';
+
+    const row = document.createElement('div');
+    row.className = `tree-node node-${node.node_type}${isSelected ? ' selected' : ''}`;
+    row.dataset.id = node.id;
+    row.innerHTML = `
+      <span class="tree-toggle">${hasChildren ? (isExpanded ? '▾' : '▸') : ''}</span>
+      <span class="tree-icon">${icons[node.node_type] || '•'}</span>
+      <span class="tree-label">${esc(node.label)}</span>
+      ${node.node_type === 'finding' ? `<span class="tree-meta">${esc(node.language || '')}</span>` : ''}
+      ${node.node_type === 'subcategory' ? `<span class="tree-meta">${(byParent[node.id] || []).length}</span>` : ''}
+    `;
+    row.addEventListener('click', () => onNodeClick(node));
+    div.appendChild(row);
+
+    if(hasChildren && isExpanded){
+      const childDiv = document.createElement('div');
+      childDiv.className = 'tree-children';
+      children.forEach(c => childDiv.appendChild(buildNode(c)));
+      div.appendChild(childDiv);
+    }
+    return div;
+  }
+
+  container.innerHTML = '';
+  const roots = byParent['root'] || [];
+  if(!roots.length){ container.innerHTML = '<div class="empty">No findings yet. Run a Hunt first.</div>'; return; }
+  roots.forEach(r => container.appendChild(buildNode(r)));
+}
+
+function onNodeClick(node){
+  if(node.node_type === 'finding'){
+    _selectedNode = node.id;
+    renderTree();
+    showDetail(node);
+  } else {
+    if(_expandedNodes.has(node.id)) _expandedNodes.delete(node.id);
+    else _expandedNodes.add(node.id);
+    renderTree();
+  }
+}
+
+function showDetail(node){
+  el('detail-empty').style.display = 'none';
+  const content = el('detail-content');
+  content.style.display = 'block';
+  el('detail-title').textContent = node.label;
+
+  const lang = (node.language || 'text').toLowerCase();
+  const syms = node.symbols || [];
+  const symHtml = syms.length ? syms.map(s => `<span class="sym-chip">${esc(s)}</span>`).join('') : '';
+
+  content.innerHTML = `
+    <div class="detail-hero">
+      <div class="detail-path">${esc(node.file_path)}</div>
+      <div class="detail-repo">
+        <a href="https://github.com/${esc(node.repo_full_name)}" target="_blank">${esc(node.repo_full_name)}</a>
+      </div>
+      <div class="detail-tags">
+        <span class="tag tag-cat">${esc(node.category)}</span>
+        <span class="tag tag-subcat">${esc(node.subcategory)}</span>
+        ${lang ? `<span class="tag tag-lang">${esc(lang)}</span>` : ''}
+        <span class="tag tag-lic">${esc(node.license_spdx || '?')}</span>
+        <span class="tag tag-score">score ${(node.score || 0).toFixed(2)}</span>
+      </div>
+    </div>
+    <div class="detail-explanation">
+      <div class="expl-label">Analysis</div>
+      ${esc(node.explanation || 'No explanation available.')}
+    </div>
+    ${syms.length ? `<div class="detail-symbols">${symHtml}</div>` : ''}
+    ${node.preview ? `
+      <div class="detail-code">
+        <div class="code-label">Code Preview</div>
+        <pre><code class="language-${esc(lang)}">${esc(node.preview)}</code></pre>
+      </div>` : ''}
+  `;
+  content.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+}
+
+async function pushFindings(){
+  const repoName = el('push-repo-input').value.trim() || 'sparkbyte-engine-findings';
+  const btn = el('push-btn'); btn.disabled = true; btn.textContent = 'Pushing...';
+  const resultEl = el('push-result'); resultEl.textContent = '';
+  const huntId = el('hunt-filter').value || null;
+  try {
+    const r = await fetch(API + '/findings/push', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo_name: repoName, hunt_id: huntId })});
+    const d = await r.json();
+    if(d.error){ resultEl.style.color = 'var(--red)'; resultEl.textContent = d.error; }
+    else {
+      resultEl.style.color = 'var(--green)';
+      resultEl.innerHTML = `Pushed ${d.pushed} findings &rarr; <a href="${esc(d.url)}" target="_blank">${esc(d.url)}</a>`;
+    }
+  } catch(e) { resultEl.style.color = 'var(--red)'; resultEl.textContent = String(e); }
+  finally { btn.disabled = false; btn.textContent = 'Push to GitHub'; }
+}
+
+// ── SEARCH ──
+async function runSearch(){
+  const q = el('search-q').value.trim();
+  if(!q){ toast('Enter a query', 'var(--red)'); return; }
+  const body = el('search-body');
+  body.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  el('search-count').textContent = '';
+  try {
+    const r = await fetch(API + '/repos/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q, limit: 12 })});
+    const d = await r.json();
+    const repos = d.results || [];
+    el('search-count').textContent = repos.length + ' repos';
+    body.innerHTML = repos.length ? repos.map(r => `
+      <div class="repo-card">
+        <div class="rc-info">
+          <div class="rc-name">${esc(r.full_name)}</div>
+          <div class="rc-desc">${esc(r.description || 'No description.')}</div>
+          <div class="rc-meta"><span class="rc-stars">★ ${r.stars || 0}</span><span>${esc(r.language || '?')}</span><span>${esc(r.license || '?')}</span></div>
+        </div>
+        <button class="ingest-inline" onclick="quickIngest('${esc(r.full_name)}')">Ingest</button>
+      </div>`).join('') : '<div class="empty">No results.</div>';
+  } catch(e) { body.innerHTML = `<div class="empty" style="color:var(--red)">${esc(String(e))}</div>`; }
+}
+
+async function quickIngest(repo){
+  toast('Ingesting ' + repo + '...', 'var(--green)');
+  try {
+    const r = await fetch(API + '/repos/ingest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo, max_files: 60 })});
+    const d = await r.json();
+    toast('Ingested ' + (d.ingested_files || 0) + ' files from ' + repo, 'var(--green)');
+    checkHealth();
+  } catch(e) { toast('Ingest failed: ' + String(e), 'var(--red)'); }
+}
+
+// ── INGEST ──
+async function runIngest(){
+  const repo = el('ingest-repo').value.trim();
+  if(!repo){ toast('Enter repo owner/name', 'var(--red)'); return; }
+  const max_files = parseInt(el('ingest-max').value) || 60;
+  const panel = el('ingest-result-panel'), body = el('ingest-result-body');
+  panel.style.display = 'block';
+  body.innerHTML = '<span class="spinner"></span>';
+  try {
+    const r = await fetch(API + '/repos/ingest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo, max_files })});
+    const d = await r.json();
+    body.innerHTML = `<div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center;">
+      <div><div style="color:var(--dim);font-size:9px;letter-spacing:1px;margin-bottom:4px;font-weight:600;">REPO</div><div style="color:var(--blue);font-weight:600;">${esc(d.repo || repo)}</div></div>
+      <div><div style="color:var(--dim);font-size:9px;letter-spacing:1px;margin-bottom:4px;font-weight:600;">LICENSE</div><div>${esc(d.license || '?')}</div></div>
+      <div><div style="color:var(--dim);font-size:9px;letter-spacing:1px;margin-bottom:4px;font-weight:600;">FILES</div><div style="color:var(--green);font-size:24px;font-weight:700;font-family:'Cascadia Code',monospace;">${d.ingested_files || 0}</div></div>
+    </div>`;
+    toast('Ingested ' + (d.ingested_files || 0) + ' files', 'var(--green)');
+    checkHealth();
+  } catch(e) { body.innerHTML = `<span style="color:var(--red)">${esc(String(e))}</span>`; }
+}
+
+// ── SCOUT ──
+async function runScout(){
+  const task = el('scout-task').value.trim();
+  if(!task){ toast('Enter a task', 'var(--red)'); return; }
+  const limit = parseInt(el('scout-limit').value) || 8;
+  const body = el('scout-body');
+  body.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  el('scout-count').textContent = '';
+  try {
+    const r = await fetch(API + '/tasks/scout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task, limit })});
+    const d = await r.json();
+    const hits = d.hits || [];
+    el('scout-count').textContent = hits.length + ' hits';
+    body.innerHTML = hits.length ? hits.map((h, i) => renderHitCard(h, i)).join('') : '<div class="empty">No hits. Try ingesting repos first, or use Hunt.</div>';
+  } catch(e) { body.innerHTML = `<div class="empty" style="color:var(--red)">${esc(String(e))}</div>`; }
+}
+
+// ── FORGE ──
+async function runForge(){
+  const name = el('forge-name').value.trim(), task = el('forge-task').value.trim();
+  if(!name || !task){ toast('Name and task required', 'var(--red)'); return; }
+  const out_dir = el('forge-out').value.trim() || 'skills';
+  const panel = el('forge-result-panel'), body = el('forge-result-body');
+  panel.style.display = 'block';
+  body.innerHTML = '<span class="spinner"></span>';
+  try {
+    const r = await fetch(API + '/skills/forge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, task, out_dir })});
+    const d = await r.json();
+    body.innerHTML = `<div style="padding:8px 0;">
+      <div style="color:var(--green);font-size:16px;font-weight:700;letter-spacing:1px;">${esc(d.name)}</div>
+      <div style="color:var(--dim);font-size:11px;margin-top:6px;">${esc(d.task)}</div>
+      <div style="color:var(--dim);font-size:10px;margin-top:12px;">module &rarr; <span style="color:var(--text);font-family:'Cascadia Code',monospace;">${esc(d.module_path)}</span></div>
+      <div style="color:var(--dim);font-size:10px;margin-top:4px;">manifest &rarr; <span style="color:var(--text);font-family:'Cascadia Code',monospace;">${esc(d.manifest_path)}</span></div>
+    </div>`;
+    toast('Skill forged: ' + d.name, 'var(--green)');
+  } catch(e) { body.innerHTML = `<span style="color:var(--red)">${esc(String(e))}</span>`; }
+}
+
+// ── INIT ──
+el('hunt-input').addEventListener('keydown', e => { if(e.key === 'Enter') runHunt(); });
+checkHealth();
+loadDashboard();
+setInterval(checkHealth, 15000);
+</script>
+</body>
+</html>

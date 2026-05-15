@@ -2,7 +2,7 @@
   "The Gremlin": {
     "agent_file": "../agents/The_Gremlin_Full.json",
     "default_memory_mode": "HYBRID",
-    "default_backend_id": "google-gemini",
+    "default_backend_id": "openrouter",
     "drive_type": null,
     "tags": [
       "chaos",
@@ -12,7 +12,7 @@
   "SparkByte": {
     "agent_file": "../agents/SparkByte_Full.json",
     "default_memory_mode": "HYBRID",
-    "default_backend_id": "google-gemini",
+    "default_backend_id": "openrouter",
     "drive_type": "assistant",
     "tags": [
       "quirky",
@@ -23,7 +23,7 @@
   "SparkByte-Classic": {
     "agent_file": "../agents/SparkByte_Full.json",
     "default_memory_mode": "HYBRID",
-    "default_backend_id": "google-gemini",
+    "default_backend_id": "openrouter",
     "drive_type": null,
     "tags": [
       "quirky",
@@ -34,7 +34,7 @@
   "Slappy": {
     "agent_file": "../agents/Slappy_Full.json",
     "default_memory_mode": "HYBRID",
-    "default_backend_id": "google-gemini",
+    "default_backend_id": "openrouter",
     "drive_type": null,
     "tags": [
       "chaotic",
@@ -45,7 +45,7 @@
   "Supervisor": {
     "agent_file": "../agents/SparkByte_Full.json",
     "default_memory_mode": "HYBRID",
-    "default_backend_id": "google-gemini",
+    "default_backend_id": "openrouter",
     "drive_type": null,
     "tags": [
       "safe",
@@ -127,6 +127,29 @@
   "Unknown": {
     "agent_file": "../agents/Unknown_Full.json",
     "default_backend_id": "google-gemini",
+    "default_memory_mode": "HYBRID",
+    "drive_type": null,
+    "tags": [
+      "imported",
+      "card-cruncher"
+    ]
+  },
+  "Cascade": {
+    "agent_file": "../agents/Cascade_Full.json",
+    "default_backend_id": "google-gemini",
+    "default_memory_mode": "HYBRID",
+    "drive_type": null,
+    "tags": [
+      "pentest",
+      "bug-bounty",
+      "cascade",
+      "relentless-verifier",
+      "vrp"
+    ]
+  },
+  "Balthazar": {
+    "agent_file": "../agents/Balthazar_Full.json",
+    "default_backend_id": "openrouter",
     "default_memory_mode": "HYBRID",
     "drive_type": null,
     "tags": [

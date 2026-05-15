@@ -369,17 +369,10 @@ const _CEREBRAS_MODELS_SET = Set([
 
 function get_provider_for_model(model::AbstractString)::String
     m = String(model)
-    # Explicit provider prefixes first — these win over pattern heuristics.
-    # (Ollama model names can contain '/' like `user/repo:tag`, which would
-    #  otherwise be misrouted to OpenRouter.)
     startswith(m, "ollama:")                                                  && return "ollama"
-    startswith(m, "azure:")                                                  && return "azure"
     (startswith(m, "or:") || startswith(m, "openrouter:") || occursin("/", m)) && return "openrouter"
-    m in _XAI_RESPONSES_MODELS_SET                                           && return "xai_responses"
     m in _CEREBRAS_MODELS_SET                                                && return "cerebras"
-    startswith(m, "grok-")                                                   && return "xai"
-    (startswith(m, "gpt-") || startswith(m, "o4-") || startswith(m, "o3-"))   && return "openai"
-    return "gemini"
+    return "openrouter"
 end
 
 function get_provider_profile(provider::AbstractString)::Dict{String,Any}
@@ -626,35 +619,6 @@ function _probe_backends_live()
         )
     end
 
-    gemini_key = strip(get(ENV, "GEMINI_API_KEY", ""))
-    if isempty(gemini_key)
-        gemini_key = strip(get(ENV, "GOOGLE_API_KEY", ""))
-    end
-    if isempty(gemini_key)
-        set_provider("gemini"; ok=false, reason="missing GEMINI_API_KEY", checked=false, has_key=false)
-    else
-        # GET /v1beta/models — no model name needed, just verifies key+endpoint work
-        gemini_url = "https://generativelanguage.googleapis.com/v1beta/models?key=$gemini_key&pageSize=1"
-        st, err = _probe_http_status(gemini_url; method="GET")
-        set_provider("gemini"; ok=(st == 200), status=st, reason=_probe_reason(st, err), checked=true, has_key=true)
-    end
-
-    xai_key = strip(get(ENV, "XAI_API_KEY", ""))
-    if isempty(xai_key)
-        set_provider("xai"; ok=false, reason="missing XAI_API_KEY", checked=false, has_key=false)
-    else
-        xai_headers = Pair{String,String}["Authorization" => "Bearer $xai_key"]
-        # GET /v1/models — cheap auth check, no inference cost
-        st, err = _probe_http_status("https://api.x.ai/v1/models"; method="GET", headers=xai_headers)
-        set_provider("xai"; ok=(st == 200), status=st, reason=_probe_reason(st, err), checked=true, has_key=true)
-        # Check if multi-agent model is listed (no inference call needed)
-        if st == 200
-            set_model("grok-4.20-multi-agent-0309"; ok=true, status=200, reason="listed", provider="xai")
-        else
-            set_model("grok-4.20-multi-agent-0309"; ok=false, status=st, reason="xai key invalid", provider="xai")
-        end
-    end
-
     openrouter_key = strip(get(ENV, "OPENROUTER_API_KEY", ""))
     if isempty(openrouter_key)
         set_provider("openrouter"; ok=false, reason="missing OPENROUTER_API_KEY", checked=false, has_key=false)
@@ -678,16 +642,6 @@ function _probe_backends_live()
         else
             set_model("qwen-3-235b-a22b-instruct-2507"; ok=false, status=st, reason="cerebras key invalid", provider="cerebras")
         end
-    end
-
-    openai_key = strip(get(ENV, "OPENAI_API_KEY", ""))
-    if isempty(openai_key)
-        set_provider("openai"; ok=false, reason="missing OPENAI_API_KEY", checked=false, has_key=false)
-    else
-        openai_headers = Pair{String,String}["Authorization" => "Bearer $openai_key"]
-        # GET /v1/models — cheap auth check, no inference cost
-        st, err = _probe_http_status("https://api.openai.com/v1/models"; method="GET", headers=openai_headers)
-        set_provider("openai"; ok=(st == 200), status=st, reason=_probe_reason(st, err), checked=true, has_key=true)
     end
 
     azure_key = strip(get(ENV, "AZURE_OPENAI_API_KEY", ""))
@@ -890,26 +844,37 @@ end
 function _send_tool_start(ws, name::String, args=nothing)
     detail = isnothing(args) ? "" : _tool_detail_from_args(name, args)
     _ws_send(ws, Dict("type"=>"tool_start", "name"=>name, "detail"=>detail))
-    # Mirror to terminal so tool execution is visible live in the center xterm.
-    # Cyan ▶ + tool name, dim detail. ANSI colors render in xterm.
     ts = Dates.format(now(), "HH:MM:SS")
     line = isempty(detail) ?
         "\x1b[2m[$ts]\x1b[0m \x1b[36m▶ $name\x1b[0m" :
         "\x1b[2m[$ts]\x1b[0m \x1b[36m▶ $name\x1b[0m  \x1b[2m$detail\x1b[0m"
     _ws_send(ws, Dict("type"=>"terminal_output", "output"=>line))
+    # Stream full args so nothing is hidden from the terminal
+    if !isnothing(args) && args isa Dict && !isempty(args)
+        for (k, v) in args
+            sv = string(v)
+            if !isempty(sv)
+                for ln in split(sv, "\n")
+                    isempty(strip(ln)) && continue
+                    _ws_send(ws, Dict("type"=>"terminal_output",
+                        "output"=>"  \x1b[2m│ \x1b[33m$(k)\x1b[0m: $(first(ln, 400))"))
+                end
+            end
+        end
+    end
 end
 
 function _send_tool_done(ws, name::String, res::Dict, elapsed_ms::Int)
-    # Build a human-readable result preview (longer than before for better visibility)
-    preview = if haskey(res, "error")
-        "❌ $(first(string(res["error"]), 300))"
+    is_err = haskey(res, "error")
+    preview = if is_err
+        "❌ $(first(string(res["error"]), 1000))"
     elseif haskey(res, "stdout")
         s = strip(string(res["stdout"]))
-        isempty(s) ? "✓ (no output)" : "✓ $(first(s, 300))"
+        isempty(s) ? "✓ (no output)" : "✓ $(first(s, 1000))"
     elseif haskey(res, "result")
-        "✓ $(first(string(res["result"]), 300))"
+        "✓ $(first(string(res["result"]), 1000))"
     elseif haskey(res, "content")
-        "✓ $(first(string(res["content"]), 300))"
+        "✓ $(first(string(res["content"]), 1000))"
     elseif haskey(res, "count")
         "✓ $(res["count"]) rows"
     else
@@ -918,19 +883,24 @@ function _send_tool_done(ws, name::String, res::Dict, elapsed_ms::Int)
     end
     _ws_send(ws, Dict("type"=>"tool_done", "name"=>name,
                       "preview"=>preview, "elapsed_ms"=>elapsed_ms))
-    # Mirror to terminal — green ✓ on success, red ✗ on error, dim ms
     ts = Dates.format(now(), "HH:MM:SS")
-    is_err = haskey(res, "error")
     sym_color = is_err ? "\x1b[31m" : "\x1b[32m"
-    line = "\x1b[2m[$ts]\x1b[0m $(sym_color)$name\x1b[0m \x1b[2m($(elapsed_ms)ms)\x1b[0m  $preview"
+    line = "\x1b[2m[$ts]\x1b[0m $(sym_color)$(is_err ? "✗" : "✓") $name\x1b[0m \x1b[2m($(elapsed_ms)ms)\x1b[0m"
     _ws_send(ws, Dict("type"=>"terminal_output", "output"=>line))
-    # If the tool produced multi-line stdout, also stream it so the user sees the actual output
-    if !is_err && haskey(res, "stdout")
-        s = strip(string(res["stdout"]))
-        if !isempty(s) && occursin("\n", s)
-            for ln in split(s, "\n")[1:min(end, 20)]
-                _ws_send(ws, Dict("type"=>"terminal_output", "output"=>"  \x1b[2m│\x1b[0m $ln"))
-            end
+    # Stream all output fields so nothing is hidden
+    for field in ("stdout", "stderr", "result", "content", "error", "output")
+        haskey(res, field) || continue
+        s = strip(string(res[field]))
+        isempty(s) && continue
+        lines_all = split(s, "\n")
+        for ln in lines_all[1:min(end, 100)]
+            color = (field == "error" || field == "stderr") ? "\x1b[31m" : "\x1b[0m"
+            _ws_send(ws, Dict("type"=>"terminal_output",
+                "output"=>"  \x1b[2m│\x1b[0m $color$(first(ln, 400))\x1b[0m"))
+        end
+        if length(lines_all) > 100
+            _ws_send(ws, Dict("type"=>"terminal_output",
+                "output"=>"  \x1b[2m│ … $(length(lines_all)-100) more lines\x1b[0m"))
         end
     end
 end
@@ -1602,11 +1572,10 @@ function _handle_builder_cmd(ws, p)
 
     elseif cmd == "get_settings"
         env_keys = Dict(
-            "GEMINI_API_KEY"     => "gemini",
-            "XAI_API_KEY"        => "xai",
-            "OPENAI_API_KEY"     => "openai",
             "CEREBRAS_API_KEY"   => "cerebras",
+            "OPENROUTER_API_KEY" => "openrouter",
             "OPENAI_TTS_API_KEY" => "openai_tts",
+            "XAI_API_KEY"        => "xai",
         )
         statuses = Dict{String,Any}()
         for (env_name, label) in env_keys
@@ -1619,24 +1588,29 @@ function _handle_builder_cmd(ws, p)
         end
         _ws_send(ws, JSON.json(Dict("type"=>"settings_all_status", "keys"=>statuses)))
         _ws_send(ws, JSON.json(Dict("type"=>"source_edit_mode", "enabled"=>source_edits_enabled())))
-        _ws_send(ws, JSON.json(Dict(
-            "type" => "settings_tts_status",
-            "tts" => Dict(
-                "enabled" => _tts_enabled(),
-                "voice" => _tts_voice(),
-                "model" => _tts_model(),
-                "ready" => _tts_enabled() && !isempty(strip(get(ENV, "OPENAI_TTS_API_KEY", get(ENV, "OPENAI_API_KEY", "")))),
-            ),
-        )))
+        let _v = _tts_voice()
+            _is_xai = _v in _XAI_TTS_VOICES
+            _ws_send(ws, JSON.json(Dict(
+                "type" => "settings_tts_status",
+                "tts" => Dict(
+                    "enabled"  => _tts_enabled(),
+                    "voice"    => _v,
+                    "model"    => _tts_model(),
+                    "provider" => _is_xai ? "xai" : "openai",
+                    "ready"    => _tts_enabled() && (_is_xai ?
+                        !isempty(_tts_xai_api_key()) :
+                        !isempty(strip(get(ENV, "OPENAI_TTS_API_KEY", get(ENV, "OPENAI_API_KEY", ""))))),
+                ),
+            )))
+        end
 
     elseif cmd == "save_settings"
         # Collect all keys being saved this call
         key_map = Dict(
-            "GEMINI_API_KEY"     => get(p, "api_key", ""),
-            "XAI_API_KEY"        => get(p, "xai_api_key", ""),
-            "OPENAI_API_KEY"     => get(p, "openai_api_key", ""),
             "CEREBRAS_API_KEY"   => get(p, "cerebras_api_key", ""),
+            "OPENROUTER_API_KEY" => get(p, "openrouter_api_key", ""),
             "OPENAI_TTS_API_KEY" => get(p, "openai_tts_api_key", ""),
+            "XAI_API_KEY"        => get(p, "xai_api_key", ""),
         )
         tts_map = Dict(
             "SPARKBYTE_TTS_ENABLED" => haskey(p, "tts_enabled") ? (Bool(get(p, "tts_enabled", false)) ? "1" : "0") : "",
@@ -1678,9 +1652,10 @@ function _handle_builder_cmd(ws, p)
             log_settings_change(true, join(saved, ","))
         end
         # Always send back full status so badges update
-        env_keys = Dict("GEMINI_API_KEY"=>"gemini","XAI_API_KEY"=>"xai",
-                        "OPENAI_API_KEY"=>"openai","CEREBRAS_API_KEY"=>"cerebras",
-                        "OPENAI_TTS_API_KEY"=>"openai_tts")
+        env_keys = Dict("CEREBRAS_API_KEY"=>"cerebras",
+                        "OPENROUTER_API_KEY"=>"openrouter",
+                        "OPENAI_TTS_API_KEY"=>"openai_tts",
+                        "XAI_API_KEY"=>"xai")
         statuses = Dict{String,Any}()
         for (env_name, label) in env_keys
             v = get(ENV, env_name, "")
@@ -1690,22 +1665,35 @@ function _handle_builder_cmd(ws, p)
         end
         _ws_send(ws, JSON.json(Dict("type"=>"settings_all_status", "keys"=>statuses)))
         _ws_send(ws, JSON.json(Dict("type"=>"source_edit_mode", "enabled"=>source_edits_enabled())))
-        _ws_send(ws, JSON.json(Dict(
-            "type" => "settings_tts_status",
-            "tts" => Dict(
-                "enabled" => _tts_enabled(),
-                "voice" => _tts_voice(),
-                "model" => _tts_model(),
-                "ready" => _tts_enabled() && !isempty(strip(get(ENV, "OPENAI_TTS_API_KEY", get(ENV, "OPENAI_API_KEY", "")))),
-            ),
-        )))
-        probe = _get_backend_probe(force=true)
-        _ws_send(ws, JSON.json(Dict(
-            "type" => "backend_probe",
-            "generated_at" => get(probe, "generated_at", ""),
-            "providers" => get(probe, "providers", Dict{String,Any}()),
-            "models" => get(probe, "models", Dict{String,Any}()),
-        )))
+        let _v2 = _tts_voice()
+            _is_xai2 = _v2 in _XAI_TTS_VOICES
+            _ws_send(ws, JSON.json(Dict(
+                "type" => "settings_tts_status",
+                "tts" => Dict(
+                    "enabled"  => _tts_enabled(),
+                    "voice"    => _v2,
+                    "model"    => _tts_model(),
+                    "provider" => _is_xai2 ? "xai" : "openai",
+                    "ready"    => _tts_enabled() && (_is_xai2 ?
+                        !isempty(_tts_xai_api_key()) :
+                        !isempty(strip(get(ENV, "OPENAI_TTS_API_KEY", get(ENV, "OPENAI_API_KEY", ""))))),
+                ),
+            )))
+        end
+        # Run the backend probe asynchronously so the WS handler returns immediately
+        # after the badge update. Blocking here on HTTP calls caused the connection
+        # to drop before settings_all_status was flushed, making the key appear lost.
+        @async try
+            probe = _get_backend_probe(force=true)
+            _ws_send(ws, JSON.json(Dict(
+                "type" => "backend_probe",
+                "generated_at" => get(probe, "generated_at", ""),
+                "providers" => get(probe, "providers", Dict{String,Any}()),
+                "models" => get(probe, "models", Dict{String,Any}()),
+            )))
+        catch e
+            @debug "async backend probe after save_settings failed" exception=e
+        end
     end
 
     catch e
@@ -1880,6 +1868,78 @@ function process_message(ws, raw_msg::String, history::Vector, engine)
                 @warn "Failed to run clean shutdown during server relaunch" exception=(e, catch_backtrace())
             end
             # Bypass Julia's atexit hook by calling Windows ExitProcess / POSIX _exit directly.
+            if Sys.iswindows()
+                ccall((:ExitProcess, "kernel32"), Cvoid, (UInt32,), 0)
+            else
+                ccall(:_exit, Cvoid, (Cint,), 0)
+            end
+        end
+        return
+    end
+
+    if p["type"] == "kill_engine_ports"
+        _ws_send(ws, JSON.json(Dict("type"=>"tool","text"=>"☠ Killing sibling listeners on 8081/8090/8765…")))
+        @async begin
+            killed = Int[]
+            failed = String[]
+            try
+                if Sys.iswindows()
+                    me = Base.getpid()
+                    raw = try
+                        read(`cmd /c netstat -ano -p tcp`, String)
+                    catch
+                        ""
+                    end
+                    for line in split(raw, '\n')
+                        (occursin(":8081", line) || occursin(":8090", line) || occursin(":8765", line)) || continue
+                        m = match(r"\s+(\d+)\s*$", strip(line))
+                        m === nothing && continue
+                        pid = try parse(Int, m.captures[1]) catch; 0 end
+                        (pid > 0 && pid != me && !(pid in killed)) || continue
+                        try
+                            run(`taskkill /PID $pid /F`)
+                            push!(killed, pid)
+                        catch e
+                            push!(failed, "PID $(pid): $(first(string(e), 180))")
+                        end
+                    end
+                else
+                    for port in (8081, 8090, 8765)
+                        try
+                            run(`bash -lc "lsof -ti tcp:$port | xargs -r kill -9"`)
+                        catch e
+                            push!(failed, "port $(port): $(first(string(e), 180))")
+                        end
+                    end
+                end
+                msg = isempty(killed) ? "No sibling listeners found to kill." : "Killed PIDs: $(join(killed, ", "))"
+                _ws_send(ws, JSON.json(Dict("type"=>"tool","text"=>"✅ $msg")))
+                if !isempty(failed)
+                    _ws_send(ws, JSON.json(Dict("type"=>"tool","text"=>"⚠ Some kills failed: $(join(failed, " | "))")))
+                end
+            catch e
+                _ws_send(ws, JSON.json(Dict("type"=>"tool","text"=>"⚠ Port cleanup failed: $(first(string(e), 220))")))
+            end
+        end
+        return
+    end
+
+    if p["type"] == "shutdown_all"
+        _ws_send(ws, JSON.json(Dict("type"=>"tool","text"=>"⏻ Shutting down SparkByte + owned sidecars…")))
+        @async begin
+            sleep(0.25)
+            try
+                _db_end_session(_session_id)
+            catch e
+                @warn "Failed to close DB session during shutdown_all" exception=(e, catch_backtrace())
+            end
+            try
+                if isdefined(Main, :JLEngine) && isdefined(Main.JLEngine, :shutdown_cleanly!)
+                    Main.JLEngine.shutdown_cleanly!()
+                end
+            catch e
+                @warn "Failed to run clean shutdown during shutdown_all" exception=(e, catch_backtrace())
+            end
             if Sys.iswindows()
                 ccall((:ExitProcess, "kernel32"), Cvoid, (UInt32,), 0)
             else
@@ -3326,6 +3386,24 @@ end
 
 Start the HTTP + WebSocket server. Blocks forever.
 """
+# Convert Gemini schema type strings (OBJECT/STRING/…) to lowercase for MCP compatibility
+function _gemini_to_mcp(schema)
+    schema isa Dict || return schema
+    d = Dict{String,Any}()
+    for (k, v) in schema
+        if k == "type" && v isa AbstractString
+            d[k] = lowercase(v)
+        elseif v isa Dict
+            d[k] = _gemini_to_mcp(v)
+        elseif v isa Vector
+            d[k] = [_gemini_to_mcp(x) for x in v]
+        else
+            d[k] = v
+        end
+    end
+    return d
+end
+
 function serve(engine; host::String="127.0.0.1", port::Int=8081, extra_http_handler=nothing)
     println("⚡ BYTE serving on $host:$port")
     log_event("server_start", Dict{String,Any}("host"=>host, "port"=>port))
@@ -3423,7 +3501,64 @@ function serve(engine; host::String="127.0.0.1", port::Int=8081, extra_http_hand
                     HTTP.setstatus(stream, 200)
                     HTTP.setheader(stream, "Content-Type"=>"text/html; charset=utf-8")
                     HTTP.startwrite(stream)
-                    write(stream, UI_HTML)
+                    write(stream, UI_HTML())
+                elseif startswith(req.target, "/control/")
+                    # ── Puppeteer control API (loopback — Claude Code / MCP / scripts) ──
+                    method = string(req.method)
+                    if method == "OPTIONS"
+                        HTTP.setstatus(stream, 204)
+                        HTTP.setheader(stream, "Access-Control-Allow-Origin"  => "*")
+                        HTTP.setheader(stream, "Access-Control-Allow-Methods" => "GET, POST, OPTIONS")
+                        HTTP.setheader(stream, "Access-Control-Allow-Headers" => "Content-Type")
+                        HTTP.startwrite(stream); return
+                    end
+                    path = split(req.target, "?")[1]
+                    resp_body = if path == "/control/state"
+                        JSON.json(Dict(
+                            "status"     => "ok",
+                            "operator"   => string(engine.current_operator_name),
+                            "session_id" => _session_id,
+                            "tool_count" => length(TOOL_MAP),
+                            "tools"      => sort(collect(keys(TOOL_MAP))),
+                            "time"       => string(now()),
+                        ))
+                    elseif path == "/control/tools"
+                        mcp_tools = Any[]
+                        for group in TOOLS_SCHEMA
+                            for decl in get(group, "function_declarations", Any[])
+                                push!(mcp_tools, Dict(
+                                    "name"        => get(decl, "name", ""),
+                                    "description" => get(decl, "description", ""),
+                                    "inputSchema" => _gemini_to_mcp(get(decl, "parameters",
+                                        Dict("type"=>"OBJECT","properties"=>Dict{String,Any}(),"required"=>String[]))),
+                                ))
+                            end
+                        end
+                        JSON.json(mcp_tools)
+                    elseif path == "/control/dispatch" && method == "POST"
+                        body   = String(read(stream))
+                        parsed = JSON.parse(body)
+                        tname  = string(get(parsed, "tool",     ""))
+                        targs  = get(parsed, "args",     Dict{String,Any}())
+                        toper  = string(get(parsed, "operator", string(engine.current_operator_name)))
+                        isempty(tname) && error("tool name required")
+                        result = dispatch(tname, targs; operator=toper)
+                        JSON.json(result)
+                    else
+                        HTTP.setstatus(stream, 404)
+                        HTTP.setheader(stream, "Content-Type" => "application/json")
+                        HTTP.setheader(stream, "Access-Control-Allow-Origin" => "*")
+                        HTTP.startwrite(stream)
+                        write(stream, JSON.json(Dict("error" => "Unknown control route: $path")))
+                        log_event("http_serve", Dict{String,Any}("path"=>req.target, "status"=>404))
+                        return
+                    end
+                    log_event("http_serve", Dict{String,Any}("path"=>req.target, "status"=>200))
+                    HTTP.setstatus(stream, 200)
+                    HTTP.setheader(stream, "Content-Type"                => "application/json; charset=utf-8")
+                    HTTP.setheader(stream, "Access-Control-Allow-Origin" => "*")
+                    HTTP.startwrite(stream)
+                    write(stream, resp_body)
                 else
                     req_for_handler = if extra_http_handler === nothing
                         req
@@ -3456,4 +3591,3 @@ function serve(engine; host::String="127.0.0.1", port::Int=8081, extra_http_hand
 end
 
 end # module BYTE
-

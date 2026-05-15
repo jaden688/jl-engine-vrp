@@ -1,72 +1,116 @@
-.git
-.vs/
-.vscode/
-_mcp_inspect/
-JulianMetaMorph/
-legacy/
-a2a-tck/
-a2a-inspector/
-landing/
-reports/
-pitreader_backup_copy/
-__pycache__/
-.CondaPkg/
-.venv/
-venv/
-node_modules/
-infra/
-.azure/
-elevenlabs-mcp/
-.env
-*.db
-*.sqlite
-*.png
-*.jpg
-*.jpeg
-*.webp
-*.zip
-full_telemetry.jsonl
-health_check.log
-sb_err.log
-sb_out.log
-sb_18081_err.log
-sb_18081_out.log
-run_shell.log
-*.log
-*.jsonl
-test/live_forge_tests.log
-secret.mystic
-demo.txt
-chat.jl
-gemini_assistant.jl
-riff.jl
-test_engine.jl
-verify_forge.jl
-demo_dashboard.jl
-start_dashboard.jl
-temp_live_dashboard.jl
-run_demo.bat
-start_dashboard.bat
-generate_bass.py
-cyber_grid*.png
-sparkbyte_*.png
-sparkbyte_art.png
+# Docker build cache optimization & security
+#
+# Patterns to exclude from image build context.
+# These reduce image size and build time.
 
-# Local/runtime artifacts
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# IDE & editors
+.vscode/
+.vs/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.circleci/
+
+# Documentation (loaded separately if needed)
+*.md
+CHANGELOG*
+LICENSE
+NOTICE
+
+# Development & temporary files
 .env
 .env.*.local
 *.log
 *.out.log
 *.err.log
-*.jsonl
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.Python
+.pytest_cache/
+.tox/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# Node.js (if applicable)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Julia
+.CondaPkg/
+
+# Data & artifacts
 *.db
 *.sqlite
 *.sqlite3
-__pycache__/
-*.pyc
-.vs/
+*.jsonl
+full_telemetry.jsonl
+demo.txt
+
+# Images & media
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.mp4
+*.webm
+
+# Directories with non-essential content
+JulianMetaMorph/
+legacy/
+landing/
+reports/
+test/
+infra/
+.azure/
+
+# Browser profiles & caches
+.sparkbyte-browser-profile/
+_mcp_inspect/
+elevenlabs-mcp/
+
+# Local runtime state
 data/images/
 boot_stdout.txt
 boot_stderr.txt
 live_boot.txt
-full_telemetry.jsonl
+.scanossrc
+.mcp.json
+sparkbyte_memory.db
+sparkbyte_*.png
+cyber_grid*.png
+sparkbyte_art.png
+run_demo.bat
+start_dashboard.bat
+start_agentverse.bat
+generate_bass.py
+secret.mystic
+
+# Exclude actual build artifacts (necessary for runtime)
+!mcp_server/
+!src/
+!BYTE/
+!bridge/
+!ui/
+!web/
+!upgrades/
+!assets/

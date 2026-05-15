@@ -446,3 +446,51 @@ end
 # -- tool_compose_file | 2026-05-06 10:23:34 | PASS --
 # args:   {}
 # result: {"message":"compose_file requires path and content","required":["path","content"],"result":"usage"}
+# -- tool_post_to_reddit | 2026-05-10 22:11:16 | FAIL --
+# args:   {}
+# result: {"error":"UndefVarError(:reddit_submit, 0x00000000000097c0, JLEngine.BYTE)"}
+# -- tool_get_system_vibe | 2026-05-10 22:12:54 | PASS --
+# args:   {}
+# result: {"current_mood":"Chaotic","energy_level":"64%","sparkbyte_comment":"I'm feeling extra spicy today, bestie!","status":"Just chilling in the lattice"}
+# -- tool_set_wallpaper | 2026-05-14 16:44:46 | PASS --
+# args:   {}
+# result: {"message":"Path not found or invalid: ","status":"error"}
+# -- tool_check_uptime | 2026-05-15 02:32:57 | PASS --
+# args:   {}
+# result: {"boot_time":"May 13, 2026 12:39:53 AM","source":"WMI"}
+# -- tool_hackerone_scope | 2026-05-15 02:40:23 | FAIL --
+# args:   {}
+# result: {"error":"program handle is required (e.g. 'twitter' or 'shopify')"}
+# -- tool_load_env | 2026-05-15 02:41:25 | FAIL --
+# args:   {}
+# result: {"error":".env file not found at: C:\\Users\\J_lin\\Downloads\\.env","path":"C:\\Users\\J_lin\\Downloads\\.env"}
+# -- tool_load_env | 2026-05-15 02:41:43 | PASS --
+# args:   {}
+# result: {"count":9,"loaded":["SPARKBYTE_TTS_VOICE","SPARKBYTE_TTS_ENABLED","OPENROUTER_API_KEY","CEREBRAS_API_KEY","HACKERONE_API_TOKEN","HACKERONE_USERNAME","BURP_PROXY_URL","BURP_SSL_VERIFY","HACKERONE_AUTO_SUBMIT"],"path":"C:\\Users\\J_lin\\Downloads\\jl-engine-vrp-master (2)\\jl-engine-vrp-master\\.env"}
+# -- tool_hackerone_scope | 2026-05-15 02:43:36 | FAIL --
+# args:   {}
+# result: {"error":"program handle is required (e.g. 'twitter' or 'shopify')"}
+# -- tool_hackerone_programs | 2026-05-15 02:44:12 | FAIL --
+# args:   {}
+# result: {"error":"H1 API 401: "}
+# -- tool_burp_full_history | 2026-05-15 04:23:43 | PASS --
+# args:   {}
+# result: {"exitcode":0,"result":"Invoke-WebRequest : Cannot process command because of one or more missing mandatory parameters: Uri.\r\nAt C:\\Users\\J_lin\\AppData\\Local\\Temp\\jl_zeDIF0DO5U.ps1:1 char:1\r\n+ curl -s http://127.0.0.1:1337/proxy/history?limit=100\r\n+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : InvalidArgument: (:) [Invoke-WebRequest], ParameterBindingException\r\n    + FullyQualifiedErrorId : MissingMandatoryParameter,Microsoft.PowerShell.Commands.InvokeWebRequestCommand\r\n \r\n"}
+# -- tool_idor_test | 2026-05-15 04:24:34 | PASS --
+# args:   {}
+# result: {"mutated_url":"","response_preview":"","status_code":"curl: (2) no URL specified\r\ncurl: try 'curl --help' or 'curl --manual' for more information\r\n"}
+# -- tool_idor_test | 2026-05-15 04:28:23 | PASS --
+# args:   {}
+# result: {"mutated_url":"","response_preview":"","status_code":"curl: (2) no URL specified\r\ncurl: try 'curl --help' or 'curl --manual' for more information","vulnerable":false}
+# -- tool_idor_swap_test | 2026-05-15 05:45:08 | FAIL --
+# args:   {}
+# result: {"error":"target_uuid is required"}
+# -- tool_idor_swap_test | 2026-05-15 05:46:06 | PASS --
+# args:   {}
+# result: {"body":"{\"status\":\"ok\",\"base_id\":1662,\"base_url\":\"https://claude.ai/api/organizations/40cc4923-1876-416a-ac84-656d24609c2e/chat_conversations/a0c256d1-2da7-4393-b998-cf6e1fd4d92d?tree=True&rendering_mode=messages&render_all_tools=true&consistency=eventual\",\"mutated_url\":\"https://claude.ai/api/organizations/11111111-1111-1111-1111-111111111111/chat_conversations/a0c256d1-2da7-4393-b998-cf6e1fd4d92d?tree=True&rendering_mode=messages&render_all_tools=true&consistency=eventual\",\"mutated_status\":404,\"mutated_body_snippet\":\"\u001b�\u0000\u0000Ī9�ͬ\u000ep۳%P$�|�\u0002�������\u000e�H�����\u0018\u001b�#�!�\u0017��' $�\u001dC��\u001bm'����THAT\u0010N��xC��YF�׮{��\u001b\b�1a/\\r������छ��+b\u00108\u0019<�0桽��&\u0010獹��殦�\f\u007f\"}","endpoint":"/code/repos","result":"Bridge test_org_idor response","source_uuid":"40cc4923-1876-416a-ac84-656d24609c2e","status":200,"target_uuid":"1beb5e12-f59b-404c-9b06-d6f904c99ee2"}
+# -- tool_idor_real_test | 2026-05-15 05:47:38 | FAIL --
+# args:   {}
+# result: {"error":"Need a target_uuid to test","status":"fail"}
+# -- tool_mutation_recipe | 2026-05-15 05:55:26 | FAIL --
+# args:   {}
+# result: {"error":"url is required","status":"error"}

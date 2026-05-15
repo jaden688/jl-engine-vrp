@@ -5,6 +5,14 @@
       "args": [
         "mcp_server/server.py"
       ]
+    },
+    "jl-engine-vrp": {
+      "command": "python",
+      "args": ["mcp-server/vrp_mcp_server.py"],
+      "cwd": "C:\\Users\\J_lin\\Downloads\\jl-engine-vrp-master (2)\\jl-engine-vrp-master",
+      "env": {
+        "VRP_CONTROL_URL": "http://127.0.0.1:8081"
+      }
     }
   }
 }

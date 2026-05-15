@@ -3,9 +3,6 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://unpkg.com/3d-force-graph/dist/3d-force-graph.min.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css"/>
-<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{
@@ -167,11 +164,34 @@ body{background:transparent;color:var(--green);height:100vh;height:100dvh;displa
 #sidebar.collapsed #sidebar-header > span:first-child,#sidebar.collapsed .sb-actions{display:none;}
 #sidebar.collapsed #sidebar-toggle{margin:0 auto;}
 
-/* ══════════════════════ TERMINAL PANEL ══════════════════════ */
-#terminal-panel{display:none;flex:1;flex-direction:column;overflow:hidden;background:#08080f;}
-#terminal-panel.active{display:flex;}
-#xterm-container{flex:1;padding:6px;overflow:hidden;min-height:0;}
-#xterm-container .xterm{height:100%;}
+/* ══════════════════════ ACTIVITY FEED PANEL ══════════════════════ */
+#activity-panel{display:none;flex:1;flex-direction:column;overflow:hidden;background:#07070e;}
+#activity-panel.active{display:flex;}
+#af-toolbar{height:32px;display:flex;align-items:center;gap:6px;padding:0 8px;background:rgba(0,0,0,0.5);border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0;font-size:10px;}
+#af-count{color:var(--dim);min-width:60px;letter-spacing:.5px;}
+#af-filters{display:flex;gap:3px;flex:1;}
+.af-btn{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--dim);border-radius:3px;padding:2px 7px;font-size:9px;font-family:inherit;cursor:pointer;letter-spacing:.5px;transition:.15s;}
+.af-btn:hover{background:rgba(255,255,255,0.1);color:var(--text);}
+.af-btn.active{background:rgba(0,170,255,0.15);border-color:rgba(0,170,255,0.4);color:var(--blue);}
+#af-scroll-label{display:flex;align-items:center;gap:4px;color:var(--dim);cursor:pointer;}
+#af-clear{background:rgba(255,60,60,0.1);border:1px solid rgba(255,60,60,0.25);color:#f77;border-radius:3px;padding:2px 8px;font-size:9px;font-family:inherit;cursor:pointer;}
+#af-feed{flex:1;overflow-y:auto;padding:4px 0;font-family:'JetBrains Mono','Consolas',monospace;font-size:11px;}
+.af-row{display:flex;gap:6px;padding:4px 10px;border-bottom:1px solid rgba(255,255,255,0.03);align-items:flex-start;transition:background .1s;border-left:2px solid transparent;}
+.af-row:hover{background:rgba(255,255,255,0.025);}
+.af-row[data-t=thought]{border-left-color:#a78bfa;}
+.af-row[data-t=tool]{border-left-color:#38bdf8;}
+.af-row[data-t=code]{border-left-color:#4ade80;}
+.af-row[data-t=pentest]{border-left-color:#fb923c;}
+.af-row[data-t=auto]{border-left-color:#f472b6;}
+.af-row[data-t=forge]{border-left-color:#fbbf24;}
+.af-row[data-t=reply]{border-left-color:#94a3b8;}
+.af-row[data-t=error]{border-left-color:#f87171;}
+.af-ts{color:var(--dim);font-size:9px;white-space:nowrap;padding-top:2px;min-width:58px;opacity:.7;}
+.af-icon{font-size:13px;min-width:18px;text-align:center;padding-top:1px;}
+.af-body{flex:1;color:var(--text);word-break:break-all;line-height:1.5;}
+.af-title{color:#e2e8f0;font-weight:600;}
+.af-detail{color:var(--dim);font-size:10px;margin-top:2px;max-height:400px;overflow-y:auto;line-height:1.4;}
+.af-row.expanded .af-detail{max-height:none;}
 
 /* ══════════════════════ CHAT PANEL ══════════════════════ */
 #chat-panel{
@@ -982,36 +1002,89 @@ body{background:transparent;color:var(--green);height:100vh;height:100dvh;displa
   <div class="tb-sep"></div>
   <span class="tb-label">Model</span>
   <select id="model-select">
-    <optgroup label="── Gemini ──">
-      <option value="gemini-3.1-pro-preview" selected>✦ Gemini 3.1 Pro</option>
-      <option value="gemini-3.1-flash-lite-preview">✦ Flash-Lite (fast)</option>
-      <option value="gemini-2.5-pro">✦ Gemini 2.5 Pro</option>
-      <option value="gemini-2.5-flash">✦ Gemini 2.5 Flash</option>
-      <option value="gemini-2.5-flash-lite">✦ Gemini 2.5 Flash-Lite</option>
+    <optgroup label="── OpenRouter: Anthropic ──">
+      <option value="anthropic/claude-sonnet-4-5" selected>🛤️ Claude Sonnet 4.5</option>
+      <option value="anthropic/claude-haiku-4-5">🛤️ Claude Haiku 4.5</option>
     </optgroup>
-    <optgroup label="── OpenAI ──">
-      <option value="gpt-4o-mini">🔧 GPT-4o Mini</option>
+    <optgroup label="── OpenRouter: xAI ──">
+      <option value="x-ai/grok-3-beta">🛤️ Grok 3</option>
+      <option value="x-ai/grok-3-mini-beta">🛤️ Grok 3 Mini</option>
+      <option value="x-ai/grok-2-1212">🛤️ Grok 2</option>
+      <option value="x-ai/grok-beta">🛤️ Grok (legacy)</option>
     </optgroup>
-    <optgroup label="── xAI / Grok ──">
-      <option value="grok-4.20-multi-agent-0309">🔧 Grok 4.20 Multi-Agent ✦</option>
-      <option value="grok-4.20-reasoning">🔧 Grok 4.20 Reasoning ✦</option>
+    <optgroup label="── OpenRouter: Meta / DeepSeek ──">
+      <option value="meta-llama/llama-4-maverick">🛤️ Llama 4 Maverick</option>
+      <option value="meta-llama/llama-3.1-8b-instruct:free">🛤️ Llama 3.1 8B (free)</option>
+      <option value="deepseek/deepseek-r1:free">🛤️ DeepSeek R1 (free)</option>
+      <option value="google/gemma-3-27b-it:free">🛤️ Gemma 3 27B (free)</option>
+      <option value="openrouter:custom">✏️ Custom…</option>
     </optgroup>
     <optgroup label="── Cerebras ──">
-      <option value="gpt-oss-120b">🔧 GPT-OSS 120B ✦</option>
-      <option value="zai-glm-4.7">🔧 ZAI GLM 4.7</option>
-      <option value="llama3.1-8b">🔧 Llama 3.1 8B (fast)</option>
       <option value="qwen-3-235b-a22b-instruct-2507">🔧 Qwen 3 235B</option>
+      <option value="llama3.1-8b">🔧 Llama 3.1 8B (fast)</option>
+      <option value="gpt-oss-120b">🔧 GPT-OSS 120B ✦</option>
     </optgroup>
     <optgroup label="── Ollama (Local) ──">
-      <option value="ollama:llama3.3">🦙 Llama 3.3</option>
       <option value="ollama:qwen3">🦙 Qwen 3</option>
-    </optgroup>
-    <optgroup label="── Azure ──">
-      <option value="azure:grok-4-20-reasoning">🔧 Grok 4 Reasoning (Azure) ✦</option>
-      <option value="azure:gpt-oss-120b">🔧 GPT-OSS 120B (Azure) ✦</option>
+      <option value="ollama:llama3.3">🦙 Llama 3.3</option>
     </optgroup>
     <optgroup label="── Auto ──">
-      <option value="auto">🧭 AUTO (optional)</option>
+      <option value="auto">🧭 AUTO</option>
+    </optgroup>
+  </select>
+  <span id="tb-or-custom-wrap" style="display:none;margin-left:4px;">
+    <input id="tb-or-custom-input" type="text" list="tb-or-suggestions"
+      placeholder="provider/model"
+      style="background:var(--glass);border:1px solid var(--glass-border);color:var(--text);padding:2px 6px;font-size:11px;border-radius:4px;font-family:inherit;width:180px;"
+      autocomplete="off">
+    <datalist id="tb-or-suggestions">
+      <option value="anthropic/claude-sonnet-4-5">
+      <option value="anthropic/claude-haiku-4-5">
+      <option value="anthropic/claude-opus-4-5">
+      <option value="x-ai/grok-3-beta">
+      <option value="x-ai/grok-3-mini-beta">
+      <option value="x-ai/grok-2-1212">
+      <option value="x-ai/grok-beta">
+      <option value="meta-llama/llama-4-maverick">
+      <option value="meta-llama/llama-4-scout">
+      <option value="deepseek/deepseek-r1:free">
+      <option value="deepseek/deepseek-chat-v3-0324:free">
+      <option value="google/gemma-3-27b-it:free">
+      <option value="google/gemma-3-12b-it:free">
+      <option value="meta-llama/llama-3.1-8b-instruct:free">
+      <option value="meta-llama/llama-3.3-70b-instruct:free">
+      <option value="microsoft/phi-4">
+      <option value="qwen/qwen3-235b-a22b">
+      <option value="mistralai/mistral-small-3.2-24b-instruct:free">
+    </datalist>
+  </span>
+  <div class="tb-sep"></div>
+  <button id="tb-tts-toggle" data-on="false" onclick="_tbTtsToggle()"
+    title="Toggle voice replies on/off"
+    style="background:var(--glass);border:1px solid var(--glass-border);color:var(--dim);border-radius:3px;padding:1px 8px;font-family:inherit;font-size:10px;cursor:pointer;letter-spacing:1px;transition:0.15s;">🔇 TTS</button>
+  <select id="tb-tts-voice" onchange="_tbTtsSave()"
+    style="background:var(--glass);border:1px solid var(--glass-border);color:var(--dim);font-size:10px;font-family:inherit;border-radius:3px;padding:1px 4px;cursor:pointer;">
+    <optgroup label="── OpenAI ──">
+      <option value="cedar">Cedar</option>
+      <option value="marin">Marin</option>
+      <option value="coral">Coral</option>
+      <option value="nova">Nova</option>
+      <option value="alloy">Alloy</option>
+      <option value="ash">Ash</option>
+      <option value="ballad">Ballad</option>
+      <option value="echo">Echo</option>
+      <option value="fable">Fable</option>
+      <option value="onyx">Onyx</option>
+      <option value="sage">Sage</option>
+      <option value="shimmer">Shimmer</option>
+      <option value="verse">Verse</option>
+    </optgroup>
+    <optgroup label="── xAI ──">
+      <option value="sol">Sol</option>
+      <option value="rio">Rio</option>
+      <option value="nova-xai">Nova (xAI)</option>
+      <option value="ember">Ember</option>
+      <option value="aurora">Aurora</option>
     </optgroup>
   </select>
   <div class="tb-sep"></div>
@@ -1028,9 +1101,11 @@ body{background:transparent;color:var(--green);height:100vh;height:100dvh;displa
   <span style="cursor:pointer;font-size:12px;color:var(--dim);transition:0.15s;letter-spacing:1px;" onclick="openHistory()" title="Session History">◷ HISTORY</span>
   <button id="browser-toggle-btn" onclick="toggleBrowserPanel()" title="Web Browser (Ctrl+B)" style="background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.3);color:#00aaff;border-radius:3px;padding:1px 7px;font-family:inherit;font-size:10px;cursor:pointer;letter-spacing:1px;transition:0.15s;" onmouseover="this.style.background='rgba(0,170,255,0.2)'" onmouseout="this.style.background='rgba(0,170,255,0.08)'">🌐 WEB</button>
   <button id="stealth-toggle-btn" onclick="toggleStealth()" title="Stealth Browser — routed through Playwright backend (Ctrl+Shift+B)" style="background:rgba(0,255,170,0.06);border:1px solid rgba(0,255,170,0.25);color:var(--green);border-radius:3px;padding:1px 7px;font-family:inherit;font-size:10px;cursor:pointer;letter-spacing:1px;transition:0.15s;" onmouseover="this.style.background='rgba(0,255,170,0.16)'" onmouseout="this.style.background='rgba(0,255,170,0.06)'">🕵️ STEALTH</button>
-  <button id="terminal-btn" onclick="activateTerminalTab()" title="Terminal (Ctrl+`)" style="background:rgba(255,200,0,0.08);border:1px solid rgba(255,200,0,0.3);color:#ffcc00;border-radius:3px;padding:1px 7px;font-family:inherit;font-size:10px;cursor:pointer;letter-spacing:1px;transition:0.15s;" onmouseover="this.style.background='rgba(255,200,0,0.2)'" onmouseout="this.style.background='rgba(255,200,0,0.08)'">⌨ TERM</button>
+  <button id="terminal-btn" onclick="activateActivityTab()" title="Live Feed (Ctrl+`)" style="background:rgba(255,200,0,0.08);border:1px solid rgba(255,200,0,0.3);color:#ffcc00;border-radius:3px;padding:1px 7px;font-family:inherit;font-size:10px;cursor:pointer;letter-spacing:1px;transition:0.15s;" onmouseover="this.style.background='rgba(255,200,0,0.2)'" onmouseout="this.style.background='rgba(255,200,0,0.08)'">⚡ LIVE</button>
   <button id="focus-btn" onclick="toggleFocusMode()" title="Focus mode — chat only" style="background:rgba(0,200,255,0.1);border:1px solid rgba(0,200,255,0.3);color:#00c8ff;border-radius:3px;padding:1px 7px;font-family:inherit;font-size:10px;cursor:pointer;letter-spacing:1px;transition:0.15s;" onmouseover="this.style.background='rgba(0,200,255,0.22)'" onmouseout="this.style.background='rgba(0,200,255,0.1)'">◈ FOCUS</button>
   <button id="relaunch-btn" onclick="relaunchServer()" title="Relaunch server (reconnects automatically)" style="background:rgba(255,80,0,0.15);border:1px solid rgba(255,80,0,0.35);color:#ff6030;border-radius:3px;padding:1px 7px;font-family:inherit;font-size:10px;cursor:pointer;letter-spacing:1px;transition:0.15s;" onmouseover="this.style.background='rgba(255,80,0,0.28)'" onmouseout="this.style.background='rgba(255,80,0,0.15)'">↺ RELAUNCH</button>
+  <button id="kill-ports-btn" onclick="killEnginePorts()" title="Kill sibling listeners on SparkByte ports" style="background:rgba(255,140,0,0.13);border:1px solid rgba(255,140,0,0.35);color:#ffb347;border-radius:3px;padding:1px 7px;font-family:inherit;font-size:10px;cursor:pointer;letter-spacing:1px;transition:0.15s;" onmouseover="this.style.background='rgba(255,140,0,0.25)'" onmouseout="this.style.background='rgba(255,140,0,0.13)'">☠ KILL PORTS</button>
+  <button id="shutdown-all-btn" onclick="shutdownAllNow()" title="Stop SparkByte and owned sidecars now" style="background:rgba(255,45,45,0.16);border:1px solid rgba(255,45,45,0.40);color:#ff7b7b;border-radius:3px;padding:1px 7px;font-family:inherit;font-size:10px;cursor:pointer;letter-spacing:1px;transition:0.15s;" onmouseover="this.style.background='rgba(255,45,45,0.30)'" onmouseout="this.style.background='rgba(255,45,45,0.16)'">⏻ SHUTDOWN ALL</button>
   <span style="color:var(--dim);font-size:10px;" id="clock"></span>
 </div>
 
@@ -1173,8 +1248,23 @@ body{background:transparent;color:var(--green);height:100vh;height:100dvh;displa
         <span id="mind-detail-close" onclick="$('mind-detail').style.display='none'">✕</span>
       </div>
     </div>
-    <div id="terminal-panel">
-      <div id="xterm-container"></div>
+    <div id="activity-panel">
+      <div id="af-toolbar">
+        <div id="af-filters">
+          <button class="af-btn active" data-f="all" onclick="afFilter('all',this)">ALL</button>
+          <button class="af-btn" data-f="thought" onclick="afFilter('thought',this)">🧠</button>
+          <button class="af-btn" data-f="tool" onclick="afFilter('tool',this)">⚡</button>
+          <button class="af-btn" data-f="code" onclick="afFilter('code',this)">{}</button>
+          <button class="af-btn" data-f="pentest" onclick="afFilter('pentest',this)">🔍</button>
+          <button class="af-btn" data-f="forge" onclick="afFilter('forge',this)">🔨</button>
+          <button class="af-btn" data-f="reply" onclick="afFilter('reply',this)">💬</button>
+          <button class="af-btn" data-f="error" onclick="afFilter('error',this)">⚠</button>
+        </div>
+        <span id="af-count">0 events</span>
+        <label style="font-size:10px;color:var(--dim);cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="af-autoscroll" checked style="cursor:pointer"> auto</label>
+        <button onclick="afClear()" style="font-size:10px;padding:2px 8px;background:rgba(255,80,80,0.1);border:1px solid rgba(255,80,80,0.3);color:#f87171;border-radius:3px;cursor:pointer;">CLEAR</button>
+      </div>
+      <div id="af-feed"></div>
     </div>
   </div>
 
@@ -1236,30 +1326,6 @@ body{background:transparent;color:var(--green);height:100vh;height:100dvh;displa
     <!-- SYSTEM TAB -->
     <div class="sm-panel active" id="spanel-system">
       <div class="sm-section">
-        <label>Gemini API Key</label>
-        <div class="sm-row">
-          <input type="password" id="settings-apikey" placeholder="Enter your Gemini API key..." autocomplete="off">
-          <span id="apikey-status" class="sm-badge missing">NOT SET</span>
-        </div>
-        <div class="sm-hint">Get a key at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--blue);">aistudio.google.com/apikey</a></div>
-      </div>
-      <div class="sm-section">
-        <label>xAI / Grok API Key</label>
-        <div class="sm-row">
-          <input type="password" id="settings-xai-key" placeholder="Enter your xAI API key..." autocomplete="off">
-          <span id="xai-key-status" class="sm-badge missing">NOT SET</span>
-        </div>
-        <div class="sm-hint">Get a key at <a href="https://console.x.ai/" target="_blank" style="color:var(--blue);">console.x.ai</a></div>
-      </div>
-      <div class="sm-section">
-        <label>OpenAI API Key</label>
-        <div class="sm-row">
-          <input type="password" id="settings-openai-key" placeholder="Enter your OpenAI API key..." autocomplete="off">
-          <span id="openai-key-status" class="sm-badge missing">NOT SET</span>
-        </div>
-        <div class="sm-hint">Get a key at <a href="https://platform.openai.com/api-keys" target="_blank" style="color:var(--blue);">platform.openai.com/api-keys</a></div>
-      </div>
-      <div class="sm-section">
         <label>Voice Replies</label>
         <div class="sm-row">
           <label style="flex:1;display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:0;text-transform:none;color:var(--text);">
@@ -1270,22 +1336,47 @@ body{background:transparent;color:var(--green);height:100vh;height:100dvh;displa
         </div>
         <div class="sm-row">
           <select id="settings-tts-voice">
-            <option value="cedar">Cedar</option>
-            <option value="marin">Marin</option>
-            <option value="coral">Coral</option>
-            <option value="nova">Nova</option>
-            <option value="alloy">Alloy</option>
-            <option value="ash">Ash</option>
-            <option value="ballad">Ballad</option>
-            <option value="echo">Echo</option>
-            <option value="fable">Fable</option>
-            <option value="onyx">Onyx</option>
-            <option value="sage">Sage</option>
-            <option value="shimmer">Shimmer</option>
-            <option value="verse">Verse</option>
+            <optgroup label="── OpenAI ──">
+              <option value="cedar">Cedar</option>
+              <option value="marin">Marin</option>
+              <option value="coral">Coral</option>
+              <option value="nova">Nova</option>
+              <option value="alloy">Alloy</option>
+              <option value="ash">Ash</option>
+              <option value="ballad">Ballad</option>
+              <option value="echo">Echo</option>
+              <option value="fable">Fable</option>
+              <option value="onyx">Onyx</option>
+              <option value="sage">Sage</option>
+              <option value="shimmer">Shimmer</option>
+              <option value="verse">Verse</option>
+            </optgroup>
+            <optgroup label="── xAI ──">
+              <option value="sol">Sol</option>
+              <option value="rio">Rio</option>
+              <option value="nova-xai">Nova (xAI)</option>
+              <option value="ember">Ember</option>
+              <option value="aurora">Aurora</option>
+            </optgroup>
           </select>
         </div>
-        <div class="sm-hint">Uses OpenAI TTS with your OpenAI key. If the browser blocks playback, click the page once to unlock audio.</div>
+        <div class="sm-hint">OpenAI voices use <code>OPENAI_TTS_API_KEY</code>. xAI voices (Sol, Rio, etc.) use <code>XAI_API_KEY</code>. Click the page once to unlock audio if playback is blocked.</div>
+      </div>
+      <div class="sm-section">
+        <label>xAI API Key</label>
+        <div class="sm-row">
+          <input type="password" id="settings-xai-tts-key" placeholder="Enter your xAI API key..." autocomplete="off">
+          <span id="xai-key-status" class="sm-badge missing">NOT SET</span>
+        </div>
+        <div class="sm-hint">Used for xAI TTS voices (Sol, Rio, etc.). Get a key at <a href="https://console.x.ai/" target="_blank" style="color:var(--blue);">console.x.ai</a></div>
+      </div>
+      <div class="sm-section">
+        <label>OpenAI TTS API Key</label>
+        <div class="sm-row">
+          <input type="password" id="settings-openai-tts-key" placeholder="Enter your OpenAI API key..." autocomplete="off">
+          <span id="openai-tts-key-status" class="sm-badge missing">NOT SET</span>
+        </div>
+        <div class="sm-hint">Used for OpenAI TTS voices (Cedar, Nova, etc.). Stored as <code>OPENAI_TTS_API_KEY</code>.</div>
       </div>
       <div class="sm-section">
         <label>Cerebras API Key</label>
@@ -1294,6 +1385,14 @@ body{background:transparent;color:var(--green);height:100vh;height:100dvh;displa
           <span id="cerebras-key-status" class="sm-badge missing">NOT SET</span>
         </div>
         <div class="sm-hint">Get a key at <a href="https://cloud.cerebras.ai/" target="_blank" style="color:var(--blue);">cloud.cerebras.ai</a></div>
+      </div>
+      <div class="sm-section">
+        <label>OpenRouter API Key</label>
+        <div class="sm-row">
+          <input type="password" id="settings-openrouter-key" placeholder="Enter your OpenRouter API key..." autocomplete="off">
+          <span id="openrouter-key-status" class="sm-badge missing">NOT SET</span>
+        </div>
+        <div class="sm-hint">Get a key at <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--blue);">openrouter.ai/keys</a>. Use any model as <code>or:provider/model</code> or just <code>provider/model</code>.</div>
       </div>
       <div class="sm-section">
         <label>Ollama (Local)</label>
@@ -1316,46 +1415,40 @@ body{background:transparent;color:var(--green);height:100vh;height:100dvh;displa
             <optgroup label="── 🧭 Auto-Router ──">
               <option value="auto">🧭 AUTO (picks best model)</option>
             </optgroup>
-            <optgroup label="── OpenRouter ──">
-              <option value="anthropic/claude-sonnet-4-5">🔧 Claude Sonnet 4.5 (OR)</option>
-              <option value="anthropic/claude-haiku-4-5">🔧 Claude Haiku 4.5 (OR)</option>
-              <option value="meta-llama/llama-4-maverick">🔧 Llama 4 Maverick (OR)</option>
-              <option value="deepseek/deepseek-r1">✦ DeepSeek R1 (OR)</option>
+            <optgroup label="── OpenRouter: Anthropic ──">
+              <option value="anthropic/claude-sonnet-4-5">🛤️ Claude Sonnet 4.5</option>
+              <option value="anthropic/claude-haiku-4-5">🛤️ Claude Haiku 4.5</option>
             </optgroup>
-            <optgroup label="── Gemini ──">
-              <option value="gemini-3.1-pro-preview">✦ Gemini 3.1 Pro</option>
-              <option value="gemini-3.1-flash-lite-preview">✦ Flash-Lite (fast)</option>
-              <option value="gemini-2.5-pro">✦ Gemini 2.5 Pro</option>
-              <option value="gemini-2.5-flash">✦ Gemini 2.5 Flash</option>
-              <option value="gemini-2.5-flash-lite">✦ Gemini 2.5 Flash-Lite</option>
+            <optgroup label="── OpenRouter: xAI ──">
+              <option value="x-ai/grok-3-beta">🛤️ Grok 3</option>
+              <option value="x-ai/grok-3-mini-beta">🛤️ Grok 3 Mini</option>
+              <option value="x-ai/grok-2-1212">🛤️ Grok 2</option>
+              <option value="x-ai/grok-beta">🛤️ Grok (legacy)</option>
             </optgroup>
-            <optgroup label="── Gemma (chat only) ──">
-              <option value="gemma-4-31b-it">💬 Gemma 4 31B</option>
-              <option value="gemma-4-26b-a4b-it">💬 Gemma 4 26B</option>
-            </optgroup>
-            <optgroup label="── Grok (xAI) ──">
-              <option value="grok-4.20-multi-agent-0309">🔧 Grok 4.20 Multi-Agent ✦</option>
-              <option value="grok-4.20-reasoning">🔧 Grok 4.20 Reasoning ✦</option>
-            </optgroup>
-            <optgroup label="── Ollama (Local) ──">
-              <option value="ollama:llama3.3">🔧 Llama 3.3</option>
-              <option value="ollama:qwen3">🔧 Qwen 3</option>
-              <option value="ollama:deepseek-r1">DeepSeek R1</option>
-              <option value="ollama:phi4">🔧 Phi 4</option>
-              <option value="ollama:mistral">Mistral</option>
+            <optgroup label="── OpenRouter: Meta / DeepSeek ──">
+              <option value="meta-llama/llama-4-maverick">🛤️ Llama 4 Maverick</option>
+              <option value="meta-llama/llama-3.1-8b-instruct:free">🛤️ Llama 3.1 8B (free)</option>
+              <option value="deepseek/deepseek-r1:free">🛤️ DeepSeek R1 (free)</option>
+              <option value="google/gemma-3-27b-it:free">🛤️ Gemma 3 27B (free)</option>
+              <option value="openrouter:custom">✏️ Custom model…</option>
             </optgroup>
             <optgroup label="── Cerebras ──">
-              <option value="gpt-oss-120b">🔧 GPT-OSS 120B ✦</option>
-              <option value="zai-glm-4.7">🔧 ZAI GLM 4.7</option>
-              <option value="llama3.1-8b">🔧 Llama 3.1 8B (fast)</option>
               <option value="qwen-3-235b-a22b-instruct-2507">🔧 Qwen 3 235B</option>
+              <option value="llama3.1-8b">🔧 Llama 3.1 8B (fast)</option>
+              <option value="gpt-oss-120b">🔧 GPT-OSS 120B ✦</option>
             </optgroup>
-            <optgroup label="── Azure AI ──">
-              <option value="azure:grok-4-20-reasoning">🔧 Grok 4 Reasoning (Azure) ✦</option>
-              <option value="azure:grok-4-20-non-reasoning">🔧 Grok 4 (Azure)</option>
-              <option value="azure:gpt-oss-120b">🔧 GPT-OSS 120B (Azure) ✦</option>
+            <optgroup label="── Ollama (Local) ──">
+              <option value="ollama:qwen3">🦙 Qwen 3</option>
+              <option value="ollama:llama3.3">🦙 Llama 3.3</option>
+              <option value="ollama:deepseek-r1">🦙 DeepSeek R1</option>
+              <option value="ollama:phi4">🦙 Phi 4</option>
+              <option value="ollama:mistral">🦙 Mistral</option>
             </optgroup>
           </select>
+        </div>
+        <div id="openrouter-custom-row" style="display:none;margin-top:6px;">
+          <input id="openrouter-custom-model" type="text" placeholder="e.g. mistralai/mixtral-8x7b-instruct" style="width:100%;box-sizing:border-box;background:var(--bg2,#111);color:var(--text,#eee);border:1px solid var(--dim,#444);border-radius:4px;padding:4px 8px;font-size:11px;font-family:inherit;" />
+          <div style="font-size:10px;color:var(--dim);margin-top:2px;">Enter any model slug from <a href="https://openrouter.ai/models" target="_blank" style="color:var(--blue)">openrouter.ai/models</a></div>
         </div>
         <div class="sm-hint">You can also switch models from the taskbar dropdown at the top.</div>
         <div class="sm-hint" id="backend-probe-summary">Backend probe pending…</div>
@@ -1647,13 +1740,10 @@ let _backendSummaryLast = '';
 function _providerForModel(model){
   if(!model) return 'unknown';
   if(model==='auto') return 'auto';
-  if(model.startsWith('azure:')) return 'azure';
+  if(model==='openrouter:custom') return 'openrouter';
   if(model.startsWith('ollama:')) return 'ollama';
   if(model.includes('/')) return 'openrouter';
   if(_CEREBRAS_MODELS.has(model)) return 'cerebras';
-  if(model.startsWith('grok-')) return 'xai';
-  if(model.startsWith('gpt-') || model.startsWith('o4-') || model.startsWith('o3-')) return 'openai';
-  if(model.startsWith('gemini-') || model.startsWith('gemma-')) return 'gemini';
   return 'unknown';
 }
 
@@ -1765,8 +1855,7 @@ function _applyBackendProbe(d){
   }
 
   const pretty = {
-    gemini:'Gemini',xai:'xAI',openrouter:'OpenRouter',cerebras:'Cerebras',
-    openai:'OpenAI',azure:'Azure',ollama:'Ollama'
+    openrouter:'OpenRouter', cerebras:'Cerebras', ollama:'Ollama'
   };
   const activeModel = (modelSelect && modelSelect.value) || '';
   const activeProviderKey = _providerForModel(activeModel);
@@ -2053,6 +2142,7 @@ function connect(){
   ws.onclose=()=>{sbStatus.textContent='● Disconnected';sbStatus.style.color='#f44';_setGenerating(false);setTimeout(connect,1500);};
   ws.onmessage=e=>{
     const d=JSON.parse(e.data);
+    afDispatch(d);
     if(d.type==='ui_update'){gearVal.textContent=d.gear;modeVal.textContent=d.modes.join(' · ');}
     else if(d.type==='model_sync'){
       // Server is authoritative — when set_current_model! runs (boot, restore,
@@ -2112,10 +2202,7 @@ function connect(){
     else if(d.type==='builder_output'){termPrint(d.output,'info');}
     else if(d.type==='source_edit_mode'){setSourceEditMode(!!d.enabled,false);}
     else if(d.type==='terminal_output'){
-      if(_xterm){
-        _xterm.write('\r\x1b[K'+(d.output||'')+'\r\n');
-        _xtermShowPrompt();
-      } else { _xtermBuf.push({text:d.output||'',cls:''}); }
+      afPush('code','Terminal','<pre style="margin:0;white-space:pre-wrap;font-size:10px">'+escHtml(d.output||'')+'</pre>');
       if(window._ollamaPendingRefresh){
         window._ollamaPendingRefresh = false;
         setTimeout(refreshOllamaModels, 500);
@@ -2124,7 +2211,7 @@ function connect(){
     else if(d.type==='operators_list'){populateOperators(d.operators);}
     else if(d.type==='search_results'){showSearchResults(d.results,d.query);}
     else if(d.type==='settings_all_status'){
-      const MAP={gemini:'apikey-status',xai:'xai-key-status',openai:'openai-key-status',cerebras:'cerebras-key-status'};
+      const MAP={cerebras:'cerebras-key-status',openrouter:'openrouter-key-status',xai:'xai-key-status',openai_tts:'openai-tts-key-status'};
       for(const[provider,badgeId] of Object.entries(MAP)){
         const s=d.keys&&d.keys[provider];const el=$(badgeId);if(!el)continue;
         if(s&&s.has_key){el.textContent='SET ('+s.key_preview+')';el.className='sm-badge ok';}
@@ -2167,7 +2254,6 @@ function connect(){
     else if(d.type==='function_call_output'){appendChat('<div class="tool">↳ '+escapeHtml(String(d.output??d.result??'')).slice(0,2000)+'</div>');}
     else if(d.type==='image_url'){const u=d.url||d.image_url||'';appendChat('<div class="msg spark"><img src="'+escapeHtml(u)+'" style="max-width:100%;border-radius:8px"/></div>');}
     else if(d.type==='input_image'){const src=d.data_url||(d.mime&&d.data?('data:'+d.mime+';base64,'+d.data):(d.data||''));if(src)appendChat('<div class="msg user"><img src="'+escapeHtml(src)+'" style="max-width:100%;border-radius:8px"/></div>');}
-    else if(d.type==='object'){appendChat('<div class="tool"><pre style="white-space:pre-wrap;margin:0">'+escapeHtml(JSON.stringify(d.data??d.object??d,null,2))+'</pre></div>');}
     else if(d.type==='browser_result'){
       const spin=$('brow-spin'),txt=$('browser-text'),ft=$('browser-foot-text');
       spin.classList.remove('on');
@@ -2186,7 +2272,7 @@ function connect(){
     else if(d.type==='mission_thought'){_missionThought(d);}
     else if(d.type==='mission_done'){_missionDone(d);}
     else if(d.type==='mind_graph'){_mindApplyGraph(d);}
-    else{console.debug('[ws] unhandled type',d.type,d);}
+    else if(!d.event){console.debug('[ws] unhandled type',d.type,d);}
   };
 }
 
@@ -2197,6 +2283,41 @@ let _speechQueue = [];
 let _speechPlaying = false;
 let _speechBlockedNoticeShown = false;
 
+function _tbTtsSetState(on, voice){
+  const btn = $('tb-tts-toggle');
+  const sel = $('tb-tts-voice');
+  if(btn){
+    btn.setAttribute('data-on', on ? 'true' : 'false');
+    btn.textContent = on ? '🔊 TTS' : '🔇 TTS';
+    btn.style.color = on ? 'var(--green)' : 'var(--dim)';
+    btn.style.borderColor = on ? 'rgba(0,255,170,0.4)' : 'var(--glass-border)';
+  }
+  if(sel && voice && sel.value !== voice) sel.value = voice;
+}
+
+function _tbTtsToggle(){
+  const btn = $('tb-tts-toggle');
+  if(!btn) return;
+  const on = btn.getAttribute('data-on') !== 'true';
+  _tbTtsSetState(on, null);
+  const enabledEl = $('settings-tts-enabled');
+  if(enabledEl) enabledEl.checked = on;
+  const sel = $('tb-tts-voice');
+  const voice = sel ? sel.value : 'cedar';
+  send({type:'builder_cmd',cmd:'save_settings', tts_enabled: on, tts_voice: voice});
+}
+
+function _tbTtsSave(){
+  const sel = $('tb-tts-voice');
+  if(!sel) return;
+  const voice = sel.value;
+  const settingsVoice = $('settings-tts-voice');
+  if(settingsVoice) settingsVoice.value = voice;
+  const btn = $('tb-tts-toggle');
+  const on = btn ? btn.getAttribute('data-on') === 'true' : false;
+  send({type:'builder_cmd',cmd:'save_settings', tts_enabled: on, tts_voice: voice});
+}
+
 function _applyTtsStatus(tts){
   const enabled = !!tts.enabled;
   const ready = !!tts.ready;
@@ -2206,6 +2327,7 @@ function _applyTtsStatus(tts){
   const badge = $('tts-status');
   if(enabledEl) enabledEl.checked = enabled;
   if(voiceEl && voiceEl.value !== voice) voiceEl.value = voice;
+  _tbTtsSetState(enabled, voice);
   if(!badge) return;
   if(enabled && ready){
     badge.textContent = 'ON';
@@ -2638,7 +2760,7 @@ function onFileLoaded(content){
 function activateTab(idx){
   deactivateForgeTab();
   _termActive=false; _missionActive=false; _mindActive=false;
-  $('terminal-panel').classList.remove('active');
+  $('activity-panel').classList.remove('active');
   $('mission-panel').classList.remove('active');
   $('mind-panel').classList.remove('active');
   if(activeTab>=0)tabs[activeTab].content=codeEditor.value;
@@ -2681,7 +2803,7 @@ function renderTabs(){
   const mindCls='mind-tab'+(_mindActive?' active':'')+(_mindHasData?' live':'');
   const mindTab=`<div class="etab ${mindCls}" onclick="activateMindTab()"><span class="mind-pulse"></span>⬡ MIND</div>`;
   const termCls='term-tab'+(_termActive?' active':'');
-  const termTab=`<div class="etab ${termCls}" onclick="activateTerminalTab()">⌨ TERMINAL</div>`;
+  const termTab=`<div class="etab ${termCls}" onclick="activateActivityTab()">⚡ LIVE</div>`;
   tabBar.innerHTML=filesTab+fileTabs+forgeTab+missionTab+mindTab+termTab;
 }
 
@@ -2691,7 +2813,7 @@ function activateForgeTab(){
   $('forge-panel').classList.add('active');
   $('mission-panel').classList.remove('active');
   $('mind-panel').classList.remove('active');
-  $('terminal-panel').classList.remove('active');
+  $('activity-panel').classList.remove('active');
   renderTabs();
 }
 function deactivateForgeTab(){
@@ -2710,7 +2832,7 @@ function activateMissionTab(){
   $('forge-panel').classList.remove('active');
   $('mission-panel').classList.add('active');
   $('mind-panel').classList.remove('active');
-  $('terminal-panel').classList.remove('active');
+  $('activity-panel').classList.remove('active');
   renderTabs();
 }
 
@@ -2830,7 +2952,7 @@ function activateMindTab(){
   $('forge-panel').classList.remove('active');
   $('mission-panel').classList.remove('active');
   $('mind-panel').classList.add('active');
-  $('terminal-panel').classList.remove('active');
+  $('activity-panel').classList.remove('active');
   renderTabs();
   if(!_mindGraph) _mindInit();
   else{ _mindGraph.width($('mind-graph-container').offsetWidth).height($('mind-graph-container').offsetHeight); }
@@ -2916,123 +3038,83 @@ function _mindApplyGraph(d){
   renderTabs();
 }
 
-/* ══ TERMINAL TAB ══ */
-let _xterm = null;
-let _xtermFit = null;
-let _xtermLine = '';
-let _xtermCursorPos = 0;
-let _xtermHistIdx = -1;
-const _xtermHistory = [];
-const _xtermBuf = []; // buffer output before xterm init
+/* ══ LIVE ACTIVITY FEED ══ */
+let _afFilter = 'all';
+let _afCount  = 0;
 
-function activateTerminalTab(){
+function activateActivityTab(){
   _termActive=true;forgeTabActive=false;fileViewerActive=false;activeTab=-1;_missionActive=false;_mindActive=false;
   $('editor-wrap').classList.add('hidden');
   $('forge-panel').classList.remove('active');
   $('mission-panel').classList.remove('active');
   $('mind-panel').classList.remove('active');
-  $('terminal-panel').classList.add('active');
+  $('activity-panel').classList.add('active');
   renderTabs();
-  _xtermInit();
-  setTimeout(()=>{if(_xtermFit)_xtermFit.fit();if(_xterm)_xterm.focus();},50);
 }
 
-function _xtermInit(){
-  if(_xterm) return;
-  _xterm = new Terminal({
-    theme:{
-      background:'#08080f', foreground:'#c8c8e0', cursor:'#00ffaa', cursorAccent:'#08080f',
-      selectionBackground:'rgba(255,42,242,0.25)',
-      black:'#0a0a12', red:'#ff5555', green:'#00ffaa', yellow:'#ffcc00',
-      blue:'#00aaff', magenta:'#ff2af2', cyan:'#00e5cc', white:'#c8c8e0',
-      brightBlack:'#3c3c6e', brightRed:'#ff6e6e', brightGreen:'#69ff94', brightYellow:'#ffffa5',
-      brightBlue:'#5bc8ff', brightMagenta:'#ff92df', brightCyan:'#a4ffff', brightWhite:'#e8e8f8',
-    },
-    fontFamily:"'JetBrains Mono','Consolas','Courier New',monospace",
-    fontSize:12, lineHeight:1.4, cursorBlink:true, cursorStyle:'block',
-    scrollback:5000, convertEol:true,
+function afPush(type, title, detail){
+  _afCount++;
+  const ts=new Date().toLocaleTimeString('en',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const icons={thought:'🧠',tool:'⚡',code:'{}',pentest:'🔍',auto:'🤖',forge:'🔨',reply:'💬',error:'⚠'};
+  const icon=icons[type]||'●';
+  const row=document.createElement('div');
+  row.className='af-row';
+  row.dataset.t=type;
+  row.innerHTML=`<span class="af-ts">${ts}</span><span class="af-icon">${icon}</span><div class="af-body"><div class="af-title">${escHtml(title)}</div>${detail?`<div class="af-detail">${detail}</div>`:''}</div>`;
+  if(detail) row.onclick=()=>row.classList.toggle('expanded');
+  const feed=$('af-feed');
+  if(feed){
+    feed.appendChild(row);
+    if(_afFilter!=='all'&&_afFilter!==type) row.style.display='none';
+    const cb=$('af-autoscroll');
+    if(cb&&cb.checked) feed.scrollTop=feed.scrollHeight;
+  }
+  const countEl=$('af-count');
+  if(countEl) countEl.textContent=_afCount+' events';
+}
+
+function afFilter(f, btn){
+  _afFilter=f;
+  document.querySelectorAll('.af-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  const feed=$('af-feed');
+  if(!feed) return;
+  feed.querySelectorAll('.af-row').forEach(r=>{
+    r.style.display=(f==='all'||r.dataset.t===f)?'':'none';
   });
-  _xtermFit = new FitAddon.FitAddon();
-  _xterm.loadAddon(_xtermFit);
-  _xterm.open($('xterm-container'));
-  _xtermFit.fit();
-
-  // Flush buffered output before terminal opened
-  _xtermBuf.forEach(({text,cls})=>_xtermWrite(text,cls));
-  _xtermBuf.length=0;
-
-  _xtermShowPrompt();
-
-  _xterm.onKey(({key,domEvent:ev})=>{
-    if(ev.keyCode===13){ // Enter
-      const cmd=_xtermLine.trim();
-      _xterm.write('\r\n');
-      _xtermLine=''; _xtermCursorPos=0;
-      if(cmd){
-        _xtermHistory.unshift(cmd); _xtermHistIdx=-1;
-        if(cmd==='clear'){ _xterm.clear(); _xtermShowPrompt(); }
-        else if(cmd.startsWith('run ')){
-          const p=cmd.slice(4).trim(), ext=p.split('.').pop();
-          send({type:'builder_cmd',cmd:'execute',code:'include("'+p+'")',lang:ext==='py'?'python':'julia'});
-          _xtermShowPrompt();
-        }
-        else if(cmd.startsWith('open ')){openFile(cmd.slice(5).trim()); _xtermShowPrompt();}
-        else if(cmd==='ls'||cmd==='dir'){loadFileTree();_xterm.writeln('\x1b[34m(see file tree)\x1b[0m');_xtermShowPrompt();}
-        else if(cmd.startsWith('save')){saveCurrentFile(); _xtermShowPrompt();}
-        else{
-          send({type:'builder_cmd',cmd:'terminal_exec',command:cmd});
-          if(/^\s*ollama\s+(pull|rm|cp|create)\b/i.test(cmd)) window._ollamaPendingRefresh=true;
-          // prompt shown when terminal_output arrives
-        }
-      } else { _xtermShowPrompt(); }
-    } else if(ev.keyCode===8){ // Backspace
-      if(_xtermCursorPos>0){
-        _xtermLine=_xtermLine.slice(0,_xtermCursorPos-1)+_xtermLine.slice(_xtermCursorPos);
-        _xtermCursorPos--;
-        _xterm.write('\b \b');
-      }
-    } else if(ev.keyCode===38){ // Up
-      if(_xtermHistory.length){ _xtermHistIdx=Math.min(_xtermHistIdx+1,_xtermHistory.length-1); _xtermRestoreLine(_xtermHistory[_xtermHistIdx]); }
-    } else if(ev.keyCode===40){ // Down
-      _xtermHistIdx=Math.max(_xtermHistIdx-1,-1);
-      _xtermRestoreLine(_xtermHistIdx>=0?_xtermHistory[_xtermHistIdx]:'');
-    } else if(ev.keyCode===37){ // Left
-      if(_xtermCursorPos>0){_xtermCursorPos--;_xterm.write('\x1b[D');}
-    } else if(ev.keyCode===39){ // Right
-      if(_xtermCursorPos<_xtermLine.length){_xtermCursorPos++;_xterm.write('\x1b[C');}
-    } else if(ev.keyCode===67&&ev.ctrlKey){ // Ctrl+C
-      _xterm.write('^C\r\n');
-      _xtermLine=''; _xtermCursorPos=0;
-      _xtermShowPrompt();
-    } else if(ev.keyCode===76&&ev.ctrlKey){ // Ctrl+L
-      _xterm.clear(); _xtermShowPrompt();
-    } else if(!ev.ctrlKey&&!ev.altKey&&!ev.metaKey&&key.length===1){
-      _xtermLine=_xtermLine.slice(0,_xtermCursorPos)+key+_xtermLine.slice(_xtermCursorPos);
-      _xtermCursorPos++;
-      _xterm.write(key);
-    }
-  });
-
-  window.addEventListener('resize',()=>{ if(_termActive&&_xtermFit) _xtermFit.fit(); });
 }
 
-function _xtermShowPrompt(){
-  _xterm.write('\x1b[32msparkbyte \x1b[35m▸\x1b[0m ');
+function afClear(){
+  const feed=$('af-feed'); if(feed) feed.innerHTML='';
+  _afCount=0;
+  const el=$('af-count'); if(el) el.textContent='0 events';
 }
-function _xtermRestoreLine(text){
-  _xterm.write('\r\x1b[32msparkbyte \x1b[35m▸\x1b[0m \x1b[K');
-  _xtermLine=text; _xtermCursorPos=text.length; _xterm.write(text);
-}
-function _xtermWrite(text,cls){
-  if(!_xterm){_xtermBuf.push({text,cls});return;}
-  let s=text;
-  if(cls==='err'||cls==='error') s='\x1b[31m'+text+'\x1b[0m';
-  else if(cls==='info') s='\x1b[36m'+text+'\x1b[0m';
-  else if(cls==='warn') s='\x1b[33m'+text+'\x1b[0m';
-  // Clear current input line, write output, restore prompt+partial input
-  _xterm.write('\r\x1b[K'+s+'\r\n');
-  if(_xtermLine) _xterm.write('\x1b[32msparkbyte \x1b[35m▸\x1b[0m '+_xtermLine);
-  else _xtermShowPrompt();
+
+function afDispatch(d){
+  if(d.type==='thinking'){
+    afPush('thought','🧠 Thinking',d.text?'<pre style="margin:0;white-space:pre-wrap;font-size:10px">'+escHtml(d.text)+'</pre>':'');
+  } else if(d.type==='thinking_done'){
+    afPush('thought','🧠 Done'+(d.chars?' ('+d.chars+' chars)':''),d.text?'<pre style="margin:0;white-space:pre-wrap;font-size:10px;max-height:160px;overflow:auto">'+escHtml(d.text)+'</pre>':'');
+  } else if(d.type==='spark'){
+    afPush('reply','💬 Reply','<div style="font-size:11px;line-height:1.5">'+marked.parse(d.text||'')+'</div>');
+  } else if(d.type==='tool_start'){
+    afPush('tool','⚡ '+(d.name||'?'),d.detail?'<span style="font-size:10px;color:var(--dim)">'+escHtml(d.detail)+'</span>':'');
+  } else if(d.type==='tool_done'){
+    afPush('tool','✓ '+(d.name||'?'),d.preview?'<pre style="margin:0;white-space:pre-wrap;font-size:10px">'+escHtml(d.preview)+'</pre>':'');
+  } else if(d.type==='tool_error'){
+    afPush('error','⚠ Tool Error','<span style="color:#f87171;font-size:10px">'+escHtml(d.text||'')+'</span>');
+  } else if(d.type==='forge_start'){
+    afPush('forge','🔨 Forge: '+(d.name||''),'<span style="font-size:10px;color:var(--dim)">'+d.total_lines+' lines</span>');
+  } else if(d.type==='forge_done'){
+    afPush('forge','✓ Forge done','');
+  } else if(d.type==='autopilot_thinking'){
+    afPush('auto','🤖 Autopilot',d.thought?'<pre style="margin:0;white-space:pre-wrap;font-size:10px">'+escHtml(d.thought)+'</pre>':'');
+  } else if(d.type==='autopilot_acted'){
+    afPush('auto','🤖 Acted',d.action?'<span style="font-size:10px">'+escHtml(d.action)+'</span>':'');
+  } else if(d.event){
+    const evIcons={ffuf_start:'📡',ffuf_hits:'🎯',nuclei_start:'🔬',nuclei_findings:'🔬',port_scan_hit:'🔓',sqlmap_finding:'💉',zap_finding:'🕷',mitm_request:'🔍'};
+    afPush('pentest',(evIcons[d.event]||'🔍')+' '+d.event,'<pre style="margin:0;white-space:pre-wrap;font-size:10px">'+escHtml(JSON.stringify(d,null,2))+'</pre>');
+  }
 }
 function _forgeStart(d){
   _forgeCurrentName = d.name||'?';
@@ -3133,8 +3215,12 @@ function updateStatus(){
 }
 
 /* ====== TERMINAL SHIMS ====== */
-function termPrint(text,cls){_xtermWrite(text,cls);}
-function clearTerm(){if(_xterm)_xterm.clear();}
+function termPrint(text,cls){
+  const t=(cls==='error'||cls==='err')?'error':(cls==='warn')?'tool':'code';
+  const title=(cls==='error'||cls==='err')?'Error':(cls==='warn')?'Warning':'Output';
+  afPush(t,title,'<pre style="margin:0;white-space:pre-wrap;font-size:10px">'+escHtml(text)+'</pre>');
+}
+function clearTerm(){afClear();}
 
 /* ====== CHAT ====== */
 function appendChat(html){const d=document.createElement('div');d.innerHTML=html;chat.appendChild(d.firstElementChild||d);chat.scrollTop=chat.scrollHeight;}
@@ -3279,8 +3365,35 @@ function _setModelEverywhere(value, sendToServer){
   }
   if(sendToServer){ send({type:'model_change', model:value}); }
 }
-modelSelect.onchange = e => _setModelEverywhere(e.target.value, true);
+modelSelect.onchange = e => {
+  const val = e.target.value;
+  const wrap = $('tb-or-custom-wrap');
+  const inp  = $('tb-or-custom-input');
+  if(val === 'openrouter:custom'){
+    if(wrap) wrap.style.display = '';
+    if(inp) inp.focus();
+  } else {
+    if(wrap) wrap.style.display = 'none';
+    _setModelEverywhere(val, true);
+  }
+};
+const _tbOrInput = $('tb-or-custom-input');
+if(_tbOrInput){
+  _tbOrInput.addEventListener('change', function(){
+    const v = this.value.trim();
+    if(v) _setModelEverywhere(v, true);
+  });
+  _tbOrInput.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ const v = this.value.trim(); if(v) _setModelEverywhere(v, true); }
+  });
+}
 const _settingsModelSel = $('settings-model');
+if(_settingsModelSel){
+  _settingsModelSel.addEventListener('change', function(){
+    const customRow = $('openrouter-custom-row');
+    if(customRow) customRow.style.display = this.value === 'openrouter:custom' ? 'block' : 'none';
+  });
+}
 if(_settingsModelSel){
   _settingsModelSel.onchange = e => _setModelEverywhere(e.target.value, true);
 }
@@ -3373,7 +3486,7 @@ setInterval(()=>{const d=new Date();$('clock').textContent=d.toLocaleTimeString(
 document.addEventListener('keydown',e=>{
   if(e.ctrlKey&&e.key==='s'){e.preventDefault();saveCurrentFile();}
   if(e.ctrlKey&&e.shiftKey&&e.key==='F'){e.preventDefault();toggleSearch();searchInput.focus();}
-  if(e.ctrlKey&&e.key==='`'){e.preventDefault();activateTerminalTab();}
+  if(e.ctrlKey&&e.key==='`'){e.preventDefault();activateActivityTab();}
   if(e.ctrlKey&&e.key==='b'){e.preventDefault();toggleChat();}
   if(e.ctrlKey&&e.key==='\\'){e.preventDefault();toggleSidebar();}
   if(e.ctrlKey&&e.key===','){e.preventDefault();openSettings();}
@@ -3395,32 +3508,39 @@ function openSettings(){
   // Request current API key status from server
   send({type:'builder_cmd',cmd:'get_settings'});
   _requestBackendProbe(false);
+  refreshOllamaModels();
 }
 function closeSettings(){$('settings-overlay').classList.remove('visible');}
 function saveSettings(){
-  const key=$('settings-apikey').value.trim();
-  const xaiKey=$('settings-xai-key') ? $('settings-xai-key').value.trim() : '';
-  const openaiKey=$('settings-openai-key') ? $('settings-openai-key').value.trim() : '';
   const cerebrasKey=$('settings-cerebras-key') ? $('settings-cerebras-key').value.trim() : '';
+  const openrouterKey=$('settings-openrouter-key') ? $('settings-openrouter-key').value.trim() : '';
+  const xaiKey=$('settings-xai-tts-key') ? $('settings-xai-tts-key').value.trim() : '';
+  const openaiTtsKey=$('settings-openai-tts-key') ? $('settings-openai-tts-key').value.trim() : '';
   const ttsEnabled=$('settings-tts-enabled') ? $('settings-tts-enabled').checked : false;
   const ttsVoice=$('settings-tts-voice') ? $('settings-tts-voice').value : 'cedar';
-  const model=$('settings-model').value;
+  let model=$('settings-model').value;
+  if(model === 'openrouter:custom'){
+    const customInput = $('openrouter-custom-model');
+    const customVal = customInput ? customInput.value.trim() : '';
+    if(customVal) model = customVal;
+  }
   const agent=$('settings-agent').value;
-  // Send all keys in one shot — server does one atomic .env write
   const payload={type:'builder_cmd',cmd:'save_settings'};
-  if(key)          payload.api_key=key;
-  if(xaiKey)       payload.xai_api_key=xaiKey;
-  if(openaiKey)    payload.openai_api_key=openaiKey;
-  if(cerebrasKey)  payload.cerebras_api_key=cerebrasKey;
+  if(cerebrasKey)   payload.cerebras_api_key=cerebrasKey;
+  if(openrouterKey) payload.openrouter_api_key=openrouterKey;
+  if(xaiKey)        payload.xai_api_key=xaiKey;
+  if(openaiTtsKey)  payload.openai_tts_api_key=openaiTtsKey;
   payload.tts_enabled = ttsEnabled;
   payload.tts_voice = ttsVoice;
+  // Sync toolbar voice
+  _tbTtsSetState(ttsEnabled, ttsVoice);
   send(payload);
   _requestBackendProbe(true);
   // Clear fields optimistically
-  if(key){$('settings-apikey').value='';}
-  if(xaiKey){$('settings-xai-key').value='';}
-  if(openaiKey){$('settings-openai-key').value='';}
   if(cerebrasKey){$('settings-cerebras-key').value='';}
+  if(openrouterKey){$('settings-openrouter-key').value='';}
+  if(xaiKey){$('settings-xai-tts-key').value='';}
+  if(openaiTtsKey){$('settings-openai-tts-key').value='';}
   // Apply model/agent changes
   const modelOpt = Array.from(modelSelect.options||[]).find(o=>o.value===model);
   if(model!==modelSelect.value && (!modelOpt || !modelOpt.disabled)){
@@ -3748,12 +3868,32 @@ function relaunchServer(){
   }
 }
 
+function killEnginePorts(){
+  if(!confirm('Kill sibling listeners on SparkByte ports (8081, 8090, 8765)?')) return;
+  termPrint('☠ Requesting port cleanup…','warn');
+  if(ws && ws.readyState===WebSocket.OPEN){
+    ws.send(JSON.stringify({type:'kill_engine_ports'}));
+  } else {
+    termPrint('⚠ Not connected — cannot issue kill command.','error');
+  }
+}
+
+function shutdownAllNow(){
+  if(!confirm('Shutdown SparkByte and owned sidecars now?')) return;
+  termPrint('⏻ Sending full shutdown…','warn');
+  if(ws && ws.readyState===WebSocket.OPEN){
+    ws.send(JSON.stringify({type:'shutdown_all'}));
+  } else {
+    termPrint('⚠ Not connected — shutdown signal not sent.','error');
+  }
+}
+
 /* ====== FILE VIEWER LOGIC ====== */
 function activateFilesTab(){
   deactivateForgeTab();
   fileViewerActive = true; _termActive = false;
   $('editor-wrap').classList.add('hidden');
-  $('terminal-panel').classList.remove('active');
+  $('activity-panel').classList.remove('active');
   $('chat-panel').classList.add('hidden');
   $('sidebar').classList.remove('hidden');
   renderTabs();
@@ -3770,8 +3910,6 @@ function hideFileViewer(){
 /* ====== BOOT ====== */
 connect();
 renderTabs();
-// Buffer these — they'll flush when user opens the terminal tab
-termPrint('⚡ JL_OS SparkByte Terminal ready','info');
-termPrint('Ctrl+` to open terminal. Ctrl+S save, Ctrl+B toggle chat.','info');
+afPush('tool','⚡ JL_OS Engine ready','<span style="font-size:10px;color:var(--dim)">Ctrl+` live feed · Ctrl+S save · Ctrl+B toggle chat · Ctrl+, settings</span>');
 </script>
 </body></html>

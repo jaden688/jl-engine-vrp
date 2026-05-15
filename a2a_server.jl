@@ -51,6 +51,15 @@ function _request_public_url(req::HTTP.Request)::String
     return "$(scheme)://$(host)"
 end
 
+function _safe_request_public_url(req::HTTP.Request)::String
+    try
+        return _request_public_url(req)
+    catch e
+        @warn "A2A public URL inference failed; using configured fallback" exception=(e, catch_backtrace())
+        return A2A_PUBLIC_URL
+    end
+end
+
 include(joinpath(@__DIR__, "a2a_billing.jl"))
 
 # ─────────────────────────────────────────────
@@ -1552,10 +1561,17 @@ function start_a2a_server(db::SQLite.DB; engine_ref=nothing)
 
             HTTP.serve(A2A_HOST, A2A_PORT) do req
                 try
-                    _handle_request(req, db, engine_ref; public_url=_request_public_url(req))
+                    _handle_request(req, db, engine_ref; public_url=_safe_request_public_url(req))
                 catch e
-                    HTTP.Response(500, ["Content-Type"=>"application/json"],
-                        JSON.json(Dict("error"=>"Internal server error: $(string(e))")))
+                    @warn "A2A request handler failed" exception=(e, catch_backtrace()) target=string(req.target) method=string(req.method)
+                    msg = sprint(showerror, e)
+                    HTTP.Response(500, [
+                        "Content-Type"=>"application/json",
+                        "Access-Control-Allow-Origin"=>"*",
+                    ], JSON.json(Dict(
+                        "error" => "Internal server error",
+                        "detail" => msg,
+                    )))
                 end
             end
         catch e

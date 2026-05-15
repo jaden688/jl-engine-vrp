@@ -1,0 +1,133 @@
+services:
+  # ── Main SparkByte Engine ──────────────────────────────────────────────────────
+  sparkbyte:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+      args:
+        - JULIA_VERSION=1.12.1
+        - PYTHON_VERSION=3.12
+    image: jaden688/jl-engine:latest
+    container_name: sparkbyte-engine
+    env_file:
+      - .env
+    environment:
+      # Engine service configuration
+      SPARKBYTE_HOST: 0.0.0.0
+      SPARKBYTE_PORT: 8081
+      SPARKBYTE_LAUNCH_BROWSER: "0"
+      SPARKBYTE_SKIP_PKG_INSTANTIATE: "1"
+      SPARKBYTE_STATE_DIR: /app/runtime
+      # A2A (Agent-to-Agent) configuration
+      A2A_HOST: 0.0.0.0
+      A2A_PORT: 8082
+      A2A_PUBLIC_URL: ${A2A_PUBLIC_URL:-http://localhost:8082}
+      A2A_API_KEY: ${A2A_API_KEY:-}
+      # Autonomous agent settings
+      JULIAN_AUTONOMOUS_SECONDS: ${JULIAN_AUTONOMOUS_SECONDS:-3600}
+      # External services (e.g., local Ollama)
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    # Volume for persistent engine state
+    volumes:
+      - sparkbyte-state:/app/runtime
+      - sparkbyte-logs:/app/logs
+      - sparkbyte-data:/app/data
+    # Enable Docker socket for container introspection (if needed)
+    # volumes:
+    #   - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "${SPARKBYTE_PUBLIC_PORT:-8081}:8081"  # Main engine HTTP API
+      - "${A2A_PUBLIC_PORT:-8082}:8082"        # A2A agent bridge
+    # Docker bridge to host for Ollama/local services
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    init: true
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import urllib.request
+          urllib.request.urlopen('http://127.0.0.1:8081/health', timeout=7).read()
+      interval: 30s
+      timeout: 8s
+      start_period: 40s
+      retries: 5
+    networks:
+      - sparkbyte-net
+
+  # ── MCP Protocol Server (Claude/LLM integration) ────────────────────────────────
+  mcp:
+    build:
+      context: .
+      dockerfile: mcp_server/Dockerfile
+      args:
+        - PYTHON_VERSION=3.12
+    image: jaden688/sparkbyte-mcp:latest
+    container_name: sparkbyte-mcp
+    env_file:
+      - .env
+    environment:
+      # MCP Server Transport & Port
+      MCP_TRANSPORT: ${MCP_TRANSPORT:-sse}
+      MCP_PORT: 8083
+      MCP_BIND: 0.0.0.0
+      MCP_BIND_ACK: ${MCP_BIND_ACK:-}
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:-}
+      # WebSocket connection to SparkByte engine
+      SPARKBYTE_WS: ws://sparkbyte:8081
+      MCP_ALLOW_REMOTE_WS: "1"
+      MCP_WS_CONCURRENCY: ${MCP_WS_CONCURRENCY:-4}
+      MCP_MAX_RESPONSE_BYTES: ${MCP_MAX_RESPONSE_BYTES:-60000}
+    ports:
+      - "${MCP_PUBLIC_PORT:-8083}:8083"  # SSE HTTP endpoint
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    init: true
+    restart: unless-stopped
+    depends_on:
+      sparkbyte:
+        condition: service_healthy
+    networks:
+      - sparkbyte-net
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import urllib.request, os
+          port = os.environ.get('MCP_PORT', '8083')
+          try:
+            urllib.request.urlopen(f'http://127.0.0.1:{port}/health', timeout=4).read()
+            exit(0)
+          except:
+            exit(1)
+      interval: 20s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+networks:
+  # Dedicated network for service-to-service communication
+  sparkbyte-net:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: br-sparkbyte
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
+
+volumes:
+  # Persistent engine state (models, session data, etc.)
+  sparkbyte-state:
+    driver: local
+  # Engine logs and diagnostics
+  sparkbyte-logs:
+    driver: local
+  # Data directory for generated outputs
+  sparkbyte-data:
+    driver: local

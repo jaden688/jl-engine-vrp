@@ -1,0 +1,28 @@
+plugins {
+    id 'java'
+}
+
+group   = 'burp.jlengine'
+version = '1.0.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Use the version matching your installed Burp Suite build.
+    // Check Help → About in Burp for the version number.
+    compileOnly 'net.portswigger.burp.extensions:montoya-api:2023.10.3'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+jar {
+    archiveFileName = 'jl-engine-bridge.jar'
+    manifest {
+        attributes 'Extension-Class': 'burp.jlengine.JLEngineBridge'
+    }
+}

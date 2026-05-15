@@ -9,6 +9,9 @@ const _TTS_VOICES = Set([
     "onyx", "sage", "shimmer", "verse", "marin", "cedar",
 ])
 
+const _XAI_TTS_DEFAULT_MODEL = "grok-tts-preview"
+const _XAI_TTS_VOICES = Set(["sol", "rio", "nova-xai", "ember", "aurora"])
+
 # Per-websocket speech queues keep replies in order even when generation is async.
 const _TTS_STATE = Dict{UInt64, Dict{Symbol,Any}}()
 const _TTS_STATE_LOCK = ReentrantLock()
@@ -24,7 +27,11 @@ end
 
 function _tts_voice()::String
     voice = lowercase(strip(get(ENV, "SPARKBYTE_TTS_VOICE", _TTS_DEFAULT_VOICE)))
-    return voice in _TTS_VOICES ? voice : _TTS_DEFAULT_VOICE
+    return (voice in _TTS_VOICES || voice in _XAI_TTS_VOICES) ? voice : _TTS_DEFAULT_VOICE
+end
+
+function _tts_xai_api_key()::String
+    strip(get(ENV, "XAI_API_KEY", ""))
 end
 
 function _tts_model()::String
@@ -121,7 +128,7 @@ function _tts_api_key()::String
     return k
 end
 
-function _tts_generate_audio(text::AbstractString; model::String=_tts_model(), voice::String=_tts_voice(), instructions::String=_tts_instructions())
+function _tts_generate_audio_openai(text::AbstractString; model::String, voice::String, instructions::String)
     api_key = _tts_api_key()
     isempty(api_key) && return Dict("error" => "Set OPENAI_TTS_API_KEY (or OPENAI_API_KEY) for voice.")
 
@@ -155,10 +162,51 @@ function _tts_generate_audio(text::AbstractString; model::String=_tts_model(), v
         return Dict("error" => "OpenAI TTS request failed (status $(resp.status)): $(first(err_msg, 240))")
     end
 
-    return Dict(
-        "audio_b64" => Base64.base64encode(resp.body),
-        "mime_type" => "audio/mpeg",
+    return Dict("audio_b64" => Base64.base64encode(resp.body), "mime_type" => "audio/mpeg")
+end
+
+function _tts_generate_audio_xai(text::AbstractString; model::String, voice::String, instructions::String)
+    api_key = _tts_xai_api_key()
+    isempty(api_key) && return Dict("error" => "Set XAI_API_KEY for xAI TTS.")
+
+    payload = Dict{String,Any}(
+        "model" => isempty(model) ? _XAI_TTS_DEFAULT_MODEL : model,
+        "input" => String(text),
+        "voice" => voice,
+        "response_format" => "mp3",
     )
+
+    headers = Pair{String,String}[
+        "Content-Type" => "application/json",
+        "Authorization" => "Bearer $api_key",
+    ]
+
+    resp = try
+        HTTP.post("https://api.x.ai/v1/audio/speech", headers, JSON.json(payload); status_exception=false)
+    catch e
+        return Dict("error" => "xAI TTS request failed: $(first(string(e), 240))")
+    end
+
+    if resp.status != 200
+        body_text = String(resp.body)
+        err_msg = try
+            obj = JSON.parse(body_text)
+            string(get(get(obj, "error", Dict{String,Any}()), "message", body_text))
+        catch
+            body_text
+        end
+        return Dict("error" => "xAI TTS request failed (status $(resp.status)): $(first(err_msg, 240))")
+    end
+
+    return Dict("audio_b64" => Base64.base64encode(resp.body), "mime_type" => "audio/mpeg")
+end
+
+function _tts_generate_audio(text::AbstractString; model::String=_tts_model(), voice::String=_tts_voice(), instructions::String=_tts_instructions())
+    if voice in _XAI_TTS_VOICES
+        xai_model = (isempty(model) || model == _TTS_DEFAULT_MODEL) ? _XAI_TTS_DEFAULT_MODEL : model
+        return _tts_generate_audio_xai(text; model=xai_model, voice=voice, instructions=instructions)
+    end
+    return _tts_generate_audio_openai(text; model=model, voice=voice, instructions=instructions)
 end
 
 function _tts_worker_loop(ws, queue::Channel{Dict{String,Any}})

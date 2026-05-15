@@ -10,9 +10,9 @@
       "log_file": "logs/command_bridge.log"
     },
     "backends": {
-      "default": "google-gemini",
-      "brain_backend": "google-gemini",
-      "tool_backend": "open_interpreter",
+      "default": "openrouter",
+      "brain_backend": "openrouter",
+      "tool_backend": "openrouter",
       "brain_config": {}
     },
     "listener_agent": {

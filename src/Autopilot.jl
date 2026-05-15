@@ -34,7 +34,7 @@ const _AUTOPILOT_DAY_BUCKET     = Ref("")
 
 # ── Provider-down backoff ────────────────────────────────────────────────────
 # When the active backend keeps returning bare connection-error sentinels
-# (Gemini blackout, no network, etc.), the autopilot would otherwise burn
+# (network down, API key missing, etc.), the autopilot would otherwise burn
 # its daily LLM budget retrying. Track consecutive failures and, after the
 # second one, broadcast a one-shot suggestion to swap to `/local` and stop
 # counting the calls against the budget for that tick.
@@ -42,11 +42,12 @@ const _AUTOPILOT_PROVIDER_FAILS = Ref(0)
 const _AUTOPILOT_BACKOFF_NOTIFIED = Ref(false)
 
 const _PROVIDER_DOWN_PATTERNS = (
-    r"\[ERROR: Could not connect to Google Gemini\.\]"i,
-    r"\[ERROR: Gemini request failed"i,
-    r"\[ERROR: Gemini returned HTTP"i,
+    r"\[ERROR: Could not connect to Ollama\.\]"i,
+    r"\[ERROR: OpenRouter request failed"i,
+    r"\[ERROR: OpenRouter returned HTTP"i,
+    r"\[ERROR: Cerebras request failed"i,
+    r"\[ERROR: Cerebras returned HTTP"i,
     r"\[no backend reachable\]"i,
-    r"\[ERROR: Custom HTTP backend"i,
 )
 
 function _is_provider_down(reply::AbstractString)::Bool

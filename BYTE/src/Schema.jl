@@ -86,12 +86,17 @@ const TOOLS_SCHEMA = [Dict("function_declarations" => [
     ),
     Dict(
         "name" => "execute_code",
-        "description" => "Execute a snippet of Julia or Python code and return stdout.",
+        "description" => "Execute a code snippet in any of 17 languages and return stdout. Two-phase compile pipeline for Rust/C/C++. Smart snippet wrappers auto-add boilerplate for Go/Rust/C/C++. Returns runtime field so you know which binary ran.",
         "parameters" => Dict(
             "type" => "OBJECT",
             "properties" => Dict(
-                "code"     => Dict("type" => "STRING", "description" => "Source code to execute"),
-                "language" => Dict("type" => "STRING", "description" => "'julia' or 'python' (default: julia)")
+                "code"       => Dict("type" => "STRING", "description" => "Source code to execute"),
+                "language"   => Dict("type" => "STRING",
+                    "description" => "Language to run (default: julia)",
+                    "enum" => ["julia","python","javascript","typescript","php","ruby",
+                               "perl","lua","go","rust","c","cpp","swift","csharp","r",
+                               "bash","powershell"]),
+                "timeout_ms" => Dict("type" => "INTEGER", "description" => "Execution timeout in ms (default 60000)")
             ),
             "required" => ["code"]
         )
@@ -390,6 +395,54 @@ const TOOLS_SCHEMA = [Dict("function_declarations" => [
             "required" => ["command"]
         )
     ),
+    # ── Local AI (Ollama + LM Studio) ─────────────────────────────────────────
+    Dict(
+        "name" => "ask_ollama",
+        "description" => "Send a prompt to a locally-running Ollama model and get a reply. Ollama must be running (ollama serve). Pass model='list' to see all installed models. Returns reply, model name, token count, and tokens/sec. Supports optional system prompt and temperature. Great for local reasoning, offline analysis, or comparing model outputs without sending data to a cloud API.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "prompt"      => Dict("type" => "STRING",  "description" => "The prompt to send. Omit (with model='list') to list installed models instead."),
+                "model"       => Dict("type" => "STRING",  "description" => "Ollama model name, e.g. 'llama3.2', 'mistral', 'codellama', 'deepseek-r1'. Pass 'list' to enumerate installed models. Default: llama3.2"),
+                "system"      => Dict("type" => "STRING",  "description" => "Optional system prompt to set model persona or constraints"),
+                "host"        => Dict("type" => "STRING",  "description" => "Ollama server URL. Default: http://localhost:11434"),
+                "temperature" => Dict("type" => "NUMBER",  "description" => "Sampling temperature 0.0-2.0 (default 0.7)"),
+                "max_tokens"  => Dict("type" => "INTEGER", "description" => "Max tokens to generate (Ollama: num_predict)"),
+                "timeout_s"   => Dict("type" => "INTEGER", "description" => "Request timeout in seconds (default 120)"),
+            ),
+            "required" => []
+        )
+    ),
+    Dict(
+        "name" => "ollama_pull",
+        "description" => "Download (pull) an Ollama model from the registry. Required before first use of a model. Can take several minutes depending on model size. Examples: 'llama3.2', 'mistral', 'codellama:13b', 'deepseek-r1:7b', 'phi3', 'gemma2'.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "model"     => Dict("type" => "STRING",  "description" => "Model name to pull, e.g. 'llama3.2', 'mistral', 'codellama:13b'"),
+                "host"      => Dict("type" => "STRING",  "description" => "Ollama server URL. Default: http://localhost:11434"),
+                "timeout_s" => Dict("type" => "INTEGER", "description" => "Download timeout in seconds (default 600 — large models take time)"),
+            ),
+            "required" => ["model"]
+        )
+    ),
+    Dict(
+        "name" => "ask_lmstudio",
+        "description" => "Send a prompt to a locally-running LM Studio model server (OpenAI-compatible API). LM Studio must be open with Local Server started (default port 1234). Pass model='list' to see loaded models. Supports any GGUF model loaded in LM Studio — Llama, Mistral, Qwen, Phi, Gemma, etc. No API key required. Good for privacy-sensitive tasks, local reasoning, and offline research.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "prompt"      => Dict("type" => "STRING",  "description" => "The prompt to send. Omit (with model='list') to list loaded models instead."),
+                "model"       => Dict("type" => "STRING",  "description" => "LM Studio model identifier (optional — uses currently loaded model if omitted). Pass 'list' to enumerate available models."),
+                "system"      => Dict("type" => "STRING",  "description" => "Optional system prompt"),
+                "host"        => Dict("type" => "STRING",  "description" => "LM Studio server URL. Default: http://localhost:1234"),
+                "temperature" => Dict("type" => "NUMBER",  "description" => "Sampling temperature 0.0-2.0 (default 0.7)"),
+                "max_tokens"  => Dict("type" => "INTEGER", "description" => "Max tokens to generate"),
+                "timeout_s"   => Dict("type" => "INTEGER", "description" => "Request timeout in seconds (default 120)"),
+            ),
+            "required" => []
+        )
+    ),
     Dict(
         "name" => "write_intention",
         "description" => "Queue a goal for yourself to pursue autonomously during autopilot. The autopilot will pick it up on the next plan tick and use tools to work toward it. Use this when you want to remember to do something later, or when you want to pursue a multi-step goal asynchronously.",
@@ -422,6 +475,510 @@ const TOOLS_SCHEMA = [Dict("function_declarations" => [
                 "id" => Dict("type" => "INTEGER", "description" => "Intention ID to mark complete. Omit to clear all pending.")
             ),
             "required" => []
+        )
+    ),
+    # ── Pentest & Bug Hunting ──────────────────────────────────────────────────
+    Dict(
+        "name" => "pentest_session",
+        "description" => "Full engagement orchestrator — chains all pentest tools against a target in one shot. Streams live progress to the UI, writes findings to memory and thoughts diary, returns a risk-scored report. scope: 'quick' (tech+headers+cors), 'standard' (+ port_scan, dir_fuzz, ssl_inspect), 'deep' (everything incl. subdomain_enum, js_harvest). Active operator auto-selects wordlist: Gremlin=chaos paths, Temporal=version/archive, Ironclad=security/compliance.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "target"   => Dict("type" => "STRING", "description" => "Domain or URL to test, e.g. 'example.com'"),
+                "scope"    => Dict("type" => "STRING", "description" => "quick | standard | deep", "enum" => ["quick","standard","deep"]),
+                "operator" => Dict("type" => "STRING", "description" => "Active operator name (auto-detected if omitted)"),
+            ),
+            "required" => ["target"]
+        )
+    ),
+    Dict(
+        "name" => "http_probe",
+        "description" => "Full HTTP request inspector — any method, custom headers/body, returns status, response headers, timing, body preview.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "url"              => Dict("type" => "STRING",  "description" => "Full URL to probe"),
+                "method"           => Dict("type" => "STRING",  "description" => "HTTP method", "enum" => ["GET","POST","HEAD","PUT","DELETE","OPTIONS","PATCH"]),
+                "body"             => Dict("type" => "STRING",  "description" => "Request body for POST/PUT/PATCH"),
+                "headers"          => Dict("type" => "OBJECT",  "description" => "Custom headers as key-value pairs"),
+                "follow_redirects" => Dict("type" => "BOOLEAN", "description" => "Follow redirects (default true)"),
+                "timeout_ms"       => Dict("type" => "INTEGER", "description" => "Timeout ms (default 10000)"),
+            ),
+            "required" => ["url"]
+        )
+    ),
+    Dict(
+        "name" => "security_headers",
+        "description" => "Audit HTTP security headers — HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, COOP, COEP. Scores 0-100, letter grade, flags leaky server headers. Writes findings to thoughts diary.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "url"      => Dict("type" => "STRING", "description" => "Target URL"),
+                "operator" => Dict("type" => "STRING", "description" => "Active operator (auto-detected if omitted)"),
+            ),
+            "required" => ["url"]
+        )
+    ),
+    Dict(
+        "name" => "cors_check",
+        "description" => "Test a URL for CORS misconfigs — origin reflection, null origin bypass, attacker-subdomain trust, wildcard+credentials. Fires preflight OPTIONS too. Writes vulns to memory.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "url"      => Dict("type" => "STRING", "description" => "Target URL"),
+                "origin"   => Dict("type" => "STRING", "description" => "Custom origin to test"),
+                "operator" => Dict("type" => "STRING", "description" => "Active operator (auto-detected if omitted)"),
+            ),
+            "required" => ["url"]
+        )
+    ),
+    Dict(
+        "name" => "port_scan",
+        "description" => "TCP port scanner — streams live open/closed results to the UI as each port resolves. Flags high-risk services (Telnet, SMB, RDP, Redis, Elasticsearch, MongoDB). Writes summary to thoughts diary.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "host"     => Dict("type" => "STRING",  "description" => "Hostname or IP"),
+                "ports"    => Dict("type" => "STRING",  "description" => "Port range or list: '80', '1-1024', '22,80,443,8080'"),
+                "timeout_ms" => Dict("type" => "INTEGER","description" => "Per-port connect timeout ms (default 1500)"),
+                "operator" => Dict("type" => "STRING",  "description" => "Active operator (auto-detected if omitted)"),
+            ),
+            "required" => ["host"]
+        )
+    ),
+    Dict(
+        "name" => "ssl_inspect",
+        "description" => "TLS/SSL certificate inspector — expiry, issuer, SANs, protocol versions, cipher suite. Flags self-signed, expired, weak ciphers.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "host"     => Dict("type" => "STRING",  "description" => "Hostname to inspect"),
+                "port"     => Dict("type" => "INTEGER", "description" => "Port (default 443)"),
+                "operator" => Dict("type" => "STRING",  "description" => "Active operator (auto-detected if omitted)"),
+            ),
+            "required" => ["host"]
+        )
+    ),
+    Dict(
+        "name" => "dir_fuzz",
+        "description" => "Directory/path fuzzer — streams hits live. Operator-aware wordlist: Gremlin=chaos/backdoor paths, Temporal=version/archive, Ironclad=security/compliance. Custom wordlist accepted.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "url"        => Dict("type" => "STRING",  "description" => "Base URL to fuzz"),
+                "wordlist"   => Dict("type" => "ARRAY",   "description" => "Custom path list (uses built-in if omitted)", "items" => Dict("type" => "STRING")),
+                "threads"    => Dict("type" => "INTEGER", "description" => "Parallel requests (default 10)"),
+                "operator"   => Dict("type" => "STRING",  "description" => "Active operator (auto-detected if omitted)"),
+            ),
+            "required" => ["url"]
+        )
+    ),
+    Dict(
+        "name" => "js_harvest",
+        "description" => "Scrape JavaScript files from a URL and scan for 15 secret patterns: API keys (OpenAI, GitHub PAT, Slack, Google, AWS), JWTs, hardcoded passwords, DB connection strings, private keys.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "url"      => Dict("type" => "STRING", "description" => "Page URL to harvest JS from"),
+                "operator" => Dict("type" => "STRING", "description" => "Active operator (auto-detected if omitted)"),
+            ),
+            "required" => ["url"]
+        )
+    ),
+    Dict(
+        "name" => "secret_watch",
+        "description" => "Defensive leaked-secret monitor for authorized targets. Modes: audit (scan URL plus discovered JS and return masked findings with fingerprints), safe_store (save masked findings to memory only), report (generate remediation-ready markdown; optional write_to path). Never returns full raw secret values.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "mode" => Dict("type" => "STRING", "description" => "audit | safe_store | report", "enum" => ["audit", "safe_store", "report"]),
+                "url" => Dict("type" => "STRING", "description" => "Authorized page URL to scan for leaked secrets in HTML/JS."),
+                "text" => Dict("type" => "STRING", "description" => "Optional inline text/blob to scan for leaked secrets."),
+                "max_js" => Dict("type" => "INTEGER", "description" => "Maximum JS files to fetch and scan from script tags (default 20)."),
+                "max_findings" => Dict("type" => "INTEGER", "description" => "Maximum findings to return (default 200)."),
+                "write_to" => Dict("type" => "STRING", "description" => "Optional output path for report mode markdown.")
+            ),
+            "required" => ["mode"]
+        )
+    ),
+    Dict(
+        "name" => "subdomain_enum",
+        "description" => "Subdomain enumeration via DNS resolution. Streams live discovered subdomains to the UI. Uses built-in wordlist extended by operator wordlist if active.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "domain"   => Dict("type" => "STRING", "description" => "Root domain, e.g. example.com"),
+                "wordlist" => Dict("type" => "ARRAY",  "description" => "Custom prefix list (built-in used if omitted)", "items" => Dict("type" => "STRING")),
+                "operator" => Dict("type" => "STRING", "description" => "Active operator (auto-detected if omitted)"),
+            ),
+            "required" => ["domain"]
+        )
+    ),
+    Dict(
+        "name" => "tech_detect",
+        "description" => "Fingerprint the tech stack — server, CMS (WordPress/Drupal/Joomla/Magento), framework (Laravel/Django/Rails), frontend (Next.js/React/Vue/Angular). Audits cookies for missing HttpOnly/Secure/SameSite.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "url"      => Dict("type" => "STRING", "description" => "URL to fingerprint"),
+                "operator" => Dict("type" => "STRING", "description" => "Active operator (auto-detected if omitted)"),
+            ),
+            "required" => ["url"]
+        )
+    ),
+    Dict(
+        "name" => "param_probe",
+        "description" => "Probe a URL parameter with 15 injection payloads — SQLi, XSS (3), LFI (2), SSTI (2), open redirect, SSRF, XXE, null byte, integer overflow. Detects confirmed findings by response diff. Streams critical findings live.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "url"      => Dict("type" => "STRING", "description" => "URL to probe"),
+                "param"    => Dict("type" => "STRING", "description" => "Parameter name to inject into"),
+                "payloads" => Dict("type" => "ARRAY",  "description" => "Custom payload list (built-in used if omitted)",
+                    "items" => Dict("type" => "OBJECT",
+                        "properties" => Dict(
+                            "label" => Dict("type" => "STRING"),
+                            "value" => Dict("type" => "STRING"),
+                            "note"  => Dict("type" => "STRING"),
+                        ),
+                        "required" => ["label","value"])),
+                "operator" => Dict("type" => "STRING", "description" => "Active operator (auto-detected if omitted)"),
+            ),
+            "required" => ["url","param"]
+        )
+    ),
+    # ── External CLI Security Tools ───────────────────────────────────────────
+    Dict(
+        "name" => "ffuf",
+        "description" => "Fast web fuzzer. Place FUZZ keyword in the URL (path, param, header). Streams hits back. Defaults to SecLists/dirb wordlists in WSL. Supports custom path lists or inline wordlist arrays. Returns hits with status, length, word count.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "url"          => Dict("type" => "STRING",  "description" => "URL with FUZZ placeholder, e.g. https://target.com/FUZZ or https://target.com/api?id=FUZZ"),
+                "wordlist"     => Dict("description" => "Wordlist: a filesystem path (string) or inline list of words (array of strings). Defaults to SecLists/dirb.", "oneOf" => [Dict("type" => "STRING"), Dict("type" => "ARRAY", "items" => Dict("type" => "STRING"))]),
+                "match_codes"  => Dict("type" => "STRING",  "description" => "Status codes to match (default '200,204,301,302,307,401,403')"),
+                "filter_codes" => Dict("type" => "STRING",  "description" => "Status codes to filter out (default '404')"),
+                "threads"      => Dict("type" => "INTEGER", "description" => "Concurrent threads (default 40)"),
+                "extra_flags"  => Dict("type" => "STRING",  "description" => "Extra ffuf flags, e.g. '-H \"Authorization: Bearer TOKEN\" -fs 0'"),
+                "timeout_ms"   => Dict("type" => "INTEGER", "description" => "Total timeout ms (default 90000)"),
+                "operator"     => Dict("type" => "STRING",  "description" => "Active operator (auto-detected if omitted)"),
+            ),
+            "required" => ["url"]
+        )
+    ),
+    Dict(
+        "name" => "nuclei",
+        "description" => "Template-based vulnerability scanner. Runs ProjectDiscovery Nuclei against a target. Returns structured JSON findings with severity, template ID, and matched URL. Writes critical findings to memory.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "target"     => Dict("type" => "STRING",  "description" => "Target URL or domain"),
+                "templates"  => Dict("type" => "STRING",  "description" => "Template path or tags, e.g. 'cves' or 'misconfiguration,exposures'. Omit for auto-selection."),
+                "severity"   => Dict("type" => "STRING",  "description" => "Severity filter (default 'low,medium,high,critical')"),
+                "tags"       => Dict("type" => "STRING",  "description" => "Tag filter, e.g. 'oast,cors,ssrf'"),
+                "rate_limit" => Dict("type" => "INTEGER", "description" => "Requests per second (default 150)"),
+                "timeout_ms" => Dict("type" => "INTEGER", "description" => "Total timeout ms (default 120000)"),
+                "operator"   => Dict("type" => "STRING",  "description" => "Active operator (auto-detected if omitted)"),
+            ),
+            "required" => ["target"]
+        )
+    ),
+    Dict(
+        "name" => "httpx",
+        "description" => "Fast HTTP prober from ProjectDiscovery. Probes one or many hosts/URLs for liveness, status code, page title, tech stack, and content length. Returns structured JSON per host. Good for recon and subdomain probing.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "targets"    => Dict("description" => "Single URL string or array of URLs/domains to probe.", "oneOf" => [Dict("type" => "STRING"), Dict("type" => "ARRAY", "items" => Dict("type" => "STRING"))]),
+                "ports"      => Dict("type" => "STRING",  "description" => "Extra ports to probe, e.g. '8080,8443,9200'"),
+                "threads"    => Dict("type" => "INTEGER", "description" => "Concurrent threads (default 50)"),
+                "timeout_ms" => Dict("type" => "INTEGER", "description" => "Total timeout ms (default 30000)"),
+                "operator"   => Dict("type" => "STRING",  "description" => "Active operator (auto-detected if omitted)"),
+            ),
+            "required" => ["targets"]
+        )
+    ),
+    Dict(
+        "name" => "sqlmap",
+        "description" => "Automatic SQL injection detector. Runs sqlmap in batch mode (non-interactive) against a URL. Returns vulnerability status, injectable params, DBMS fingerprint, and sample payloads. Writes confirmed findings to memory.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "url"        => Dict("type" => "STRING",  "description" => "Target URL with parameters, e.g. https://target.com/item?id=1"),
+                "data"       => Dict("type" => "STRING",  "description" => "POST body data, e.g. 'user=foo&pass=bar'"),
+                "param"      => Dict("type" => "STRING",  "description" => "Specific parameter to test (sqlmap tests all if omitted)"),
+                "level"      => Dict("type" => "INTEGER", "description" => "Test level 1-5 (default 1)"),
+                "risk"       => Dict("type" => "INTEGER", "description" => "Risk level 1-3 (default 1)"),
+                "technique"  => Dict("type" => "STRING",  "description" => "SQL injection techniques: B(oolean), E(rror), U(nion), S(tacked), T(ime-blind), Q(uery) — default all (BEUSTQ)"),
+                "timeout_ms" => Dict("type" => "INTEGER", "description" => "Total timeout ms (default 120000)"),
+                "operator"   => Dict("type" => "STRING",  "description" => "Active operator (auto-detected if omitted)"),
+            ),
+            "required" => ["url"]
+        )
+    ),
+    Dict(
+        "name" => "zap_scan",
+        "description" => "OWASP ZAP web application scanner via REST API. Requires ZAP running in daemon mode (zaproxy -daemon -port 8080 -config api.disablekey=true). Modes: ping (check ZAP is up), spider (crawl target), active_scan (launch active scan, returns scan_id), alerts (get findings), full (spider then alerts).",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "url"      => Dict("type" => "STRING",  "description" => "Target URL to scan (not needed for ping)"),
+                "mode"     => Dict("type" => "STRING",  "description" => "ping | spider | active_scan | alerts | full", "enum" => ["ping","spider","active_scan","alerts","full"]),
+                "zap_port" => Dict("type" => "INTEGER", "description" => "ZAP API port (default 8080)"),
+                "api_key"  => Dict("type" => "STRING",  "description" => "ZAP API key (omit when api.disablekey=true)"),
+                "operator" => Dict("type" => "STRING",  "description" => "Active operator (auto-detected if omitted)"),
+            ),
+            "required" => ["mode"]
+        )
+    ),
+    Dict(
+        "name" => "mitm_flows",
+        "description" => "Read and decode a saved mitmproxy flow file (.mitm) using mitmdump. Supports mitmproxy filter expressions to narrow results. Returns structured flow records with request/response details.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "flow_file" => Dict("type" => "STRING",  "description" => "Path to the .mitm flow file (WSL path on Windows, e.g. /home/user/capture.mitm)"),
+                "filter"    => Dict("type" => "STRING",  "description" => "mitmproxy filter expression, e.g. '~url target.com' or '~m POST' or '~s 200'"),
+                "limit"     => Dict("type" => "INTEGER", "description" => "Max flows to return (default 50)"),
+                "timeout_ms"=> Dict("type" => "INTEGER", "description" => "Timeout ms (default 30000)"),
+                "operator"  => Dict("type" => "STRING",  "description" => "Active operator (auto-detected if omitted)"),
+            ),
+            "required" => ["flow_file"]
+        )
+    ),
+    # ── HackerOne Program Intelligence ────────────────────────────────────────
+    Dict(
+        "name" => "hackerone_programs",
+        "description" => "List HackerOne bug bounty programs you are enrolled in — name, handle, bounty eligibility, response SLA. Use this to find program handles for hackerone_scope and cascade_spawn.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict{String,Any}(),
+            "required" => []
+        )
+    ),
+    Dict(
+        "name" => "hackerone_scope",
+        "description" => "Fetch the structured scope for a HackerOne program — in-scope and out-of-scope assets with type (URL, WILDCARD, IP_ADDRESS, CIDR), bounty eligibility, max severity, and instructions. Pass the program handle (e.g. 'twitter', 'shopify'). Results are cached for the session.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "program" => Dict("type" => "STRING", "description" => "HackerOne program handle, e.g. 'twitter' or 'shopify'"),
+            ),
+            "required" => ["program"]
+        )
+    ),
+    # ── Cascade Swarm Runner ───────────────────────────────────────────────────
+    Dict(
+        "name" => "cascade_spawn",
+        "description" => "Spawn a Cascade swarm runner. Two modes: (1) cascade_spawn(program='shopify') — pulls HackerOne structured scope, extracts all in-scope URL/WILDCARD targets, launches fleet automatically. (2) cascade_spawn(target='example.com', program='shopify') — scope-gates a single target then runs pipeline. Phases: indexing → hypothesis_generation (MetaMorph) → validation_cycle (Balthazar) → escalation. HackerOne gate: only escalates when evidence_demand AND validation_strictness both exceed 0.85. Returns swarm_id — poll with cascade_status.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "program"  => Dict("type" => "STRING", "description" => "HackerOne program handle (e.g. 'shopify'). Without target, pulls scope and runs full fleet against all in-scope assets."),
+                "target"   => Dict("type" => "STRING", "description" => "Single domain or URL to attack. If program also given, target is scope-gated before running."),
+                "scope"    => Dict("type" => "STRING", "description" => "quick | standard | deep", "enum" => ["quick","standard","deep"]),
+                "operator" => Dict("type" => "STRING", "description" => "Active operator (auto-detected if omitted)"),
+                "recon"    => Dict("type" => "OBJECT", "description" => "Pre-collected recon data (runs auto-recon if omitted)"),
+            ),
+            "required" => []
+        )
+    ),
+    Dict(
+        "name" => "cascade_status",
+        "description" => "Poll a Cascade swarm runner. Returns phase, after_state, confirmed/failed findings, evidence_demand, validation_strictness, and advisory. Omit swarm_id to see all active runners.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "swarm_id" => Dict("type" => "STRING", "description" => "Swarm ID from cascade_spawn (omit for all)"),
+            ),
+            "required" => []
+        )
+    ),
+    Dict(
+        "name" => "cascade_kill",
+        "description" => "Terminate a running Cascade swarm runner.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "swarm_id" => Dict("type" => "STRING", "description" => "Swarm ID to kill"),
+            ),
+            "required" => ["swarm_id"]
+        )
+    ),
+    Dict(
+        "name" => "cascade_submit",
+        "description" => "Manually submit a staged Cascade report to HackerOne after review. Only works on swarms in 'staged_for_review' status. Run cascade_status first to inspect the findings, then call this to send.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "swarm_id" => Dict("type" => "STRING", "description" => "Swarm ID from cascade_spawn"),
+            ),
+            "required" => ["swarm_id"]
+        )
+    ),
+    Dict(
+        "name" => "swarm_launch",
+        "description" => "Distributed multi-target swarm — spawns one Cascade runner per target in parallel Julia Tasks. Returns fleet_id grouping all swarm_ids. Poll with cascade_status().",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "targets"  => Dict("type" => "ARRAY", "description" => "List of domains/URLs to hit in parallel", "items" => Dict("type" => "STRING")),
+                "scope"    => Dict("type" => "STRING", "description" => "quick | standard | deep", "enum" => ["quick","standard","deep"]),
+                "operator" => Dict("type" => "STRING", "description" => "Active operator (auto-detected if omitted)"),
+            ),
+            "required" => ["targets"]
+        )
+    ),
+    # ── Persistent REPL Sessions ───────────────────────────────────────────────
+    Dict(
+        "name" => "repl_open",
+        "description" => "Open a persistent REPL session that retains state (variables, imports, definitions) across multiple repl_exec calls. Supported languages: python, julia, node, ruby, lua, r, bash. Returns session_id. If session_id already exists, returns existing session info without restarting.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "lang"       => Dict("type" => "STRING", "description" => "Language: python, julia, node, ruby, lua, r, bash", "enum" => ["python","julia","node","ruby","lua","r","bash"]),
+                "session_id" => Dict("type" => "STRING", "description" => "Custom name for this session (auto-generated if omitted). Use a descriptive name like 'recon_py' or 'exploit_js'."),
+            ),
+            "required" => []
+        )
+    ),
+    Dict(
+        "name" => "repl_exec",
+        "description" => "Execute code in a persistent REPL session. State from previous calls (variables, imports, defined functions) is preserved. If session_id does not exist and auto_open=true (default), creates the session automatically using the lang parameter.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "session_id" => Dict("type" => "STRING", "description" => "Session ID from repl_open, or a custom name"),
+                "code"       => Dict("type" => "STRING", "description" => "Code to execute in the session"),
+                "lang"       => Dict("type" => "STRING", "description" => "Language (only needed if auto_open creates the session)", "enum" => ["python","julia","node","ruby","lua","r","bash"]),
+                "timeout_s"  => Dict("type" => "INTEGER", "description" => "Max seconds to wait for output (default 30)"),
+                "auto_open"  => Dict("type" => "BOOLEAN", "description" => "Create session automatically if it doesn't exist (default true)"),
+            ),
+            "required" => ["session_id","code"]
+        )
+    ),
+    Dict(
+        "name" => "repl_close",
+        "description" => "Kill a persistent REPL session and clean up its process and temp files.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "session_id" => Dict("type" => "STRING", "description" => "Session ID to close"),
+            ),
+            "required" => ["session_id"]
+        )
+    ),
+    Dict(
+        "name" => "repl_list",
+        "description" => "List all active persistent REPL sessions with their language, exec count, and creation time.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict{String,Any}(),
+            "required" => []
+        )
+    ),
+    # ── Burp Suite Bridge ──────────────────────────────────────────────────────
+    Dict(
+        "name" => "burp_ping",
+        "description" => "Check if the JL Engine Bridge extension is loaded and running in Burp Suite. Returns history entry count. If unreachable, returns instructions for loading the extension.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict{String,Any}(),
+            "required" => []
+        )
+    ),
+    Dict(
+        "name" => "burp_history",
+        "description" => "Pull captured HTTP traffic from Burp Suite's proxy history via the JL Engine Bridge extension. Returns URL, method, status, response length, and timestamps. Add bodies=true to include full request/response bodies (10KB cap each).",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "limit"  => Dict("type" => "INTEGER", "description" => "Max entries to return (default 50, max 500)"),
+                "filter" => Dict("type" => "STRING",  "description" => "Filter by hostname or URL substring, e.g. 'shopify.com'"),
+                "bodies" => Dict("type" => "BOOLEAN", "description" => "Include full request and response bodies (default false)"),
+            ),
+            "required" => []
+        )
+    ),
+    Dict(
+        "name" => "burp_triage_autoscore",
+        "description" => "Analyze Burp bridge history and rank endpoints by likely auth/IDOR/security value. Prioritizes org-scoped data endpoints and downranks telemetry noise.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "limit" => Dict("type" => "INTEGER", "description" => "How many recent bridge entries to analyze (default 250, max 500)"),
+                "top_n" => Dict("type" => "INTEGER", "description" => "How many top candidates to return (default 20)"),
+                "filter" => Dict("type" => "STRING", "description" => "Optional bridge-side URL/host substring filter"),
+                "anthropic_only" => Dict("type" => "BOOLEAN", "description" => "Limit analysis to claude.ai/anthropic hosts (default true)")
+            ),
+            "required" => []
+        )
+    ),
+    Dict(
+        "name" => "burp_mutation_recipe",
+        "description" => "Generate safe, reproducible Repeater mutation steps for a captured URL (org UUID swap, conversation UUID swap, cookie-minimal replay).",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "url" => Dict("type" => "STRING", "description" => "Captured request URL to build mutations for"),
+                "replacement_org" => Dict("type" => "STRING", "description" => "Org UUID to use for org-swap tests"),
+                "replacement_conversation" => Dict("type" => "STRING", "description" => "Conversation UUID to use for conversation-swap tests")
+            ),
+            "required" => ["url"]
+        )
+    ),
+    Dict(
+        "name" => "burp_evidence_pack",
+        "description" => "Build a sanitized evidence bundle from selected Burp history ids for report writing. Redacts cookies/auth headers and includes previews only.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "ids" => Dict("type" => "ARRAY", "description" => "History entry ids to package", "items" => Dict("type" => "INTEGER")),
+                "limit" => Dict("type" => "INTEGER", "description" => "Bridge history scan limit while collecting ids (default 500)"),
+                "filter" => Dict("type" => "STRING", "description" => "Optional bridge-side filter while collecting ids")
+            ),
+            "required" => ["ids"]
+        )
+    ),
+    Dict(
+        "name" => "burp_submission_draft",
+        "description" => "One-shot Burp workflow: autoscore recent endpoints, collect sanitized evidence for top candidates, and produce a conservative HackerOne-style draft payload.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "limit" => Dict("type" => "INTEGER", "description" => "How many recent bridge entries to analyze (default 300)"),
+                "top_n" => Dict("type" => "INTEGER", "description" => "How many top candidates to include (default 5)"),
+                "filter" => Dict("type" => "STRING", "description" => "Optional bridge-side filter (default /api/organizations/)"),
+                "title" => Dict("type" => "STRING", "description" => "Optional custom report draft title"),
+                "export_path" => Dict("type" => "STRING", "description" => "Optional local file path to write the full draft JSON output")
+            ),
+            "required" => []
+        )
+    ),
+    # ── Meta-reasoning sweep ───────────────────────────────────────────────────
+    Dict(
+        "name" => "meta_sweep",
+        "description" => "Retrospective audit of recent tool results. Pulls the last N results you moved through quickly and asks you to re-examine each one: what did you assume was fine, what anomalies did you skip, what deserves a follow-up probe right now? Called automatically every 15 tool dispatches (you'll see __meta_sweep__ in the result). Also call manually any time you want to step back and double-check your work.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "n"     => Dict("type" => "INTEGER", "description" => "How many recent results to review (default 15)"),
+                "focus" => Dict("type" => "STRING",  "description" => "Optional keyword or tool name to filter — e.g. 'http_probe' or 'shopify.com'"),
+            ),
+            "required" => []
+        )
+    ),
+    Dict(
+        "name" => "meta_log",
+        "description" => "Explicitly flag something you noticed but are choosing to skip for now. It will appear in the next meta_sweep so you can investigate it later. Use this when you see something suspicious but want to finish your current thought first.",
+        "parameters" => Dict(
+            "type" => "OBJECT",
+            "properties" => Dict(
+                "item"       => Dict("type" => "STRING", "description" => "What you noticed — be specific (URL, header, value, behavior)"),
+                "assumption" => Dict("type" => "STRING", "description" => "What you're assuming about it (e.g. 'probably just a CDN header')"),
+                "context"    => Dict("type" => "STRING", "description" => "What you were doing when you noticed it"),
+            ),
+            "required" => ["item"]
         )
     ),
 ])]

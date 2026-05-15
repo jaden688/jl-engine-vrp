@@ -1,7 +1,15 @@
 haskey(ENV, "JULIA_CONDAPKG_BACKEND") || (ENV["JULIA_CONDAPKG_BACKEND"] = "Null")
 haskey(ENV, "JULIA_PYTHONCALL_EXE") || (ENV["JULIA_PYTHONCALL_EXE"] = "python")
 
-using SQLite, DataFrames, Dates, JSON, HTTP, Base64
+using SQLite, DataFrames, Dates, JSON, HTTP, Base64, SHA
+
+include(joinpath(@__DIR__, "..", "..", "src", "Tools", "PentestTools.jl"))
+include(joinpath(@__DIR__, "..", "..", "src", "Tools", "CascadeTools.jl"))
+include(joinpath(@__DIR__, "..", "..", "src", "Tools", "ReplTools.jl"))
+include(joinpath(@__DIR__, "..", "..", "src", "Tools", "BurpBridgeTools.jl"))
+include(joinpath(@__DIR__, "..", "..", "src", "Tools", "MetaReasonTools.jl"))
+include(joinpath(@__DIR__, "..", "..", "src", "Tools", "ExternalSecTools.jl"))
+include(joinpath(@__DIR__, "..", "..", "src", "Tools", "LocalAITools.jl"))
 
 # Lazy-initialized singletons — set by BYTE.init()
 const _state = Dict{Symbol, Any}(
@@ -29,8 +37,8 @@ function _pythoncall_module()
         _PYTHONCALL_MOD[] = Base.require(Base.PkgId(Base.UUID("6099a3de-0909-46bc-b1f4-468b9a2dfc0d"), "PythonCall"))
         return _PYTHONCALL_MOD[]
     catch e
-        @warn "PythonCall failed to initialize; browser tools are unavailable" exception=(e, catch_backtrace())
-        return nothing
+        @error "PythonCall failed to initialize; browser tools are unavailable" exception=(e, catch_backtrace())
+        rethrow(e)
     end
 end
 
@@ -837,42 +845,210 @@ end
 # ─────────────────────────────────────────────────────────────────────────────
 """
 
+const _LANG_ALIASES = Dict(
+    "js"=>"javascript","node"=>"javascript","ts"=>"typescript",
+    "deno"=>"typescript","bun"=>"typescript","rb"=>"ruby","rs"=>"rust",
+    "golang"=>"go","cc"=>"cpp","c++"=>"cpp","sh"=>"bash",
+    "ps"=>"powershell","ps1"=>"powershell","pl"=>"perl",
+    "rscript"=>"r","cs"=>"csharp","py"=>"python","jl"=>"julia",
+)
+
+const _LANG_EXT = Dict(
+    "julia"=>"jl","python"=>"py","javascript"=>"js","typescript"=>"ts",
+    "php"=>"php","ruby"=>"rb","go"=>"go","rust"=>"rs","c"=>"c",
+    "cpp"=>"cpp","perl"=>"pl","r"=>"R","lua"=>"lua","swift"=>"swift",
+    "csharp"=>"csx","bash"=>"sh","powershell"=>"ps1",
+)
+
+function _find_exe(candidates::String...)
+    for c in candidates
+        try
+            run(pipeline(`which $c`, devnull))
+            return c
+        catch e
+            @debug "Executable probe via which failed" candidate=c exception=(e, catch_backtrace())
+        end
+        try
+            run(pipeline(`where $c`, devnull))
+            return c
+        catch e
+            @debug "Executable probe via where failed" candidate=c exception=(e, catch_backtrace())
+        end
+    end
+    return ""
+end
+
+function _wrap_snippet(lang::String, code::String)::String
+    trimmed = strip(code)
+    if lang == "go" && !contains(code, "package main")
+        needs_main = !contains(code, "func main()")
+        imports = Set{String}()
+        contains(code, "fmt.") && push!(imports, "\"fmt\"")
+        contains(code, "os.")   && push!(imports, "\"os\"")
+        contains(code, "math.") && push!(imports, "\"math\"")
+        import_block = isempty(imports) ? "" : "import (\n$(join(["    $i" for i in imports], "\n"))\n)\n"
+        body = needs_main ? "func main() {\n$(join(["    " * l for l in split(code,"\n")], "\n"))\n}" : code
+        return "package main\n$import_block$body"
+    elseif lang == "rust" && !contains(code, "fn main(")
+        return "fn main() {\n$(join(["    " * l for l in split(code,"\n")], "\n"))\n}"
+    elseif lang == "c" && !contains(code, "int main(")
+        return "#include <stdio.h>\n#include <stdlib.h>\nint main() {\n$(join(["    " * l for l in split(code,"\n")], "\n"))\nreturn 0;\n}"
+    elseif lang == "cpp" && !contains(code, "int main(")
+        return "#include <iostream>\n#include <string>\nusing namespace std;\nint main() {\n$(join(["    " * l for l in split(code,"\n")], "\n"))\nreturn 0;\n}"
+    end
+    return code
+end
+
+function _resolve_lang_cmd(lang::String, src::String, bin::String, root::String)
+    is_win = Sys.iswindows()
+    exe(b) = is_win ? "$b.exe" : b
+
+    if lang == "julia"
+        return (`$(_julia_command(root)) $src`, "julia", nothing)
+    elseif lang == "python"
+        py = _find_exe("python3","python","py")
+        isempty(py) && return (nothing, "python", nothing)
+        return (`$py $src`, py, nothing)
+    elseif lang == "javascript"
+        rt = _find_exe("node","nodejs")
+        isempty(rt) && return (nothing, "node", nothing)
+        return (`$rt $src`, rt, nothing)
+    elseif lang == "typescript"
+        rt = _find_exe("deno","bun","ts-node","npx")
+        isempty(rt) && return (nothing, "deno/bun/ts-node", nothing)
+        cmd = rt == "deno" ? `deno run $src` :
+              rt == "bun"  ? `bun run $src`  : `$rt $src`
+        return (cmd, rt, nothing)
+    elseif lang == "php"
+        rt = _find_exe("php")
+        isempty(rt) && return (nothing, "php", nothing)
+        return (`php $src`, "php", nothing)
+    elseif lang == "ruby"
+        rt = _find_exe("ruby","ruby3","ruby2")
+        isempty(rt) && return (nothing, "ruby", nothing)
+        return (`$rt $src`, rt, nothing)
+    elseif lang == "perl"
+        rt = _find_exe("perl")
+        isempty(rt) && return (nothing, "perl", nothing)
+        return (`$rt $src`, rt, nothing)
+    elseif lang == "lua"
+        rt = _find_exe("lua","lua5.4","lua5.3","luajit")
+        isempty(rt) && return (nothing, "lua", nothing)
+        return (`$rt $src`, rt, nothing)
+    elseif lang == "r"
+        rt = _find_exe("Rscript","rscript")
+        isempty(rt) && return (nothing, "Rscript", nothing)
+        return (`$rt $src`, rt, nothing)
+    elseif lang == "bash"
+        rt = _find_exe("bash","sh")
+        isempty(rt) && return (nothing, "bash", nothing)
+        return (`$rt $src`, rt, nothing)
+    elseif lang == "powershell"
+        rt = _find_exe("pwsh","powershell")
+        isempty(rt) && return (nothing, "pwsh", nothing)
+        return (`$rt -NonInteractive -File $src`, rt, nothing)
+    elseif lang == "swift"
+        rt = _find_exe("swift")
+        isempty(rt) && return (nothing, "swift", nothing)
+        return (`$rt $src`, rt, nothing)
+    elseif lang == "csharp"
+        rt = _find_exe("dotnet-script","csi","dotnet")
+        isempty(rt) && return (nothing, "dotnet-script", nothing)
+        return (`$rt $src`, rt, nothing)
+    elseif lang == "go"
+        rt = _find_exe("go")
+        isempty(rt) && return (nothing, "go", nothing)
+        return (`go run $src`, "go", nothing)
+    elseif lang == "rust"
+        rc = _find_exe("rustc")
+        isempty(rc) && return (nothing, "rustc", nothing)
+        out = bin * (is_win ? ".exe" : "")
+        compile_cmd = `$rc $src -o $out`
+        run_cmd = `$out`
+        return (run_cmd, "rustc", compile_cmd)
+    elseif lang == "c"
+        cc = _find_exe("gcc","cc","clang","cl")
+        isempty(cc) && return (nothing, "gcc", nothing)
+        out = bin * (is_win ? ".exe" : "")
+        compile_cmd = `$cc $src -o $out`
+        return (`$out`, cc, compile_cmd)
+    elseif lang == "cpp"
+        cc = _find_exe("g++","c++","clang++","cl")
+        isempty(cc) && return (nothing, "g++", nothing)
+        out = bin * (is_win ? ".exe" : "")
+        compile_cmd = `$cc $src -o $out`
+        return (`$out`, cc, compile_cmd)
+    end
+    return (nothing, lang, nothing)
+end
+
 function tool_execute_code(args)
     try
-        lang    = string(get(args, "language", "julia"))
-        code    = string(args["code"])
-        timeout = Int(get(args, "timeout_ms", 60_000))   # default 60s hard cap
-        ext     = lang == "python" ? ".py" : ".jl"
-        tmp     = tempname() * ext
-        root    = isempty(_project_root[]) ? pwd() : _project_root[]
-        final_code = lang == "julia" ? _JULIA_SQLITE_PREAMBLE * "\n" * code : code
-        write(tmp, final_code)
-        cmd = lang == "python" ? `python $tmp` : `$(_julia_command(root)) $tmp`
+        raw_lang = lowercase(strip(string(get(args, "language", "julia"))))
+        lang     = get(_LANG_ALIASES, raw_lang, raw_lang)
+        code     = string(args["code"])
+        timeout  = Int(get(args, "timeout_ms", 60_000))
+        root     = isempty(_project_root[]) ? pwd() : _project_root[]
 
-        # Log what's about to run so the terminal shows it
-        first_line = first(strip(code), 100)
-        @info "[execute_code] running [$lang] timeout=$(timeout)ms" snippet=first_line
+        ext      = get(_LANG_EXT, lang, lang)
+        tmp_dir  = tempdir()
+        tmp_base = tempname(tmp_dir)
+        src      = "$tmp_base.$ext"
+        bin      = tmp_base * "_bin"
 
-        io   = IOBuffer()
-        proc = run(pipeline(ignorestatus(cmd), stdout=io, stderr=io); wait=false)
+        wrapped = if lang == "julia"
+            _JULIA_SQLITE_PREAMBLE * "\n" * code
+        else
+            _wrap_snippet(lang, code)
+        end
+        write(src, wrapped)
+
+        run_cmd, runtime, compile_cmd = _resolve_lang_cmd(lang, src, bin, root)
+
+        if run_cmd === nothing
+            rm(src; force=true)
+            return Dict("error" => "Runtime not found for '$lang' ($runtime). Install it and retry.",
+                        "language" => lang)
+        end
+
+        @info "[execute_code] running [$lang/$runtime] timeout=$(timeout)ms" snippet=first(strip(code), 100)
+
+        # Two-phase: compile then run (for Rust / C / C++)
+        if compile_cmd !== nothing
+            io_c = IOBuffer()
+            cp = run(pipeline(ignorestatus(compile_cmd), stdout=io_c, stderr=io_c); wait=true)
+            if cp.exitcode != 0
+                rm(src; force=true)
+                return Dict("error" => "Compile failed", "exitcode" => cp.exitcode,
+                            "stdout" => String(take!(io_c)), "language" => lang)
+            end
+        end
+
+        io = IOBuffer()
+        proc = run(pipeline(ignorestatus(run_cmd), stdout=io, stderr=io); wait=false)
         deadline = time() + timeout / 1000.0
         while process_running(proc) && time() < deadline
             sleep(0.25)
         end
         if process_running(proc)
             kill(proc)
-            rm(tmp; force=true)
-            @warn "[execute_code] process killed after $(timeout)ms timeout" lang=lang
-            return Dict("stdout" => String(take!(io)), "exitcode" => -1,
-                        "error" => "Killed after $(timeout)ms timeout.")
+            rm(src; force=true); rm(bin; force=true)
+            @warn "[execute_code] killed after $(timeout)ms" lang=lang
+            return Dict("stdout"=>"", "exitcode"=>-1, "language"=>lang, "runtime"=>runtime,
+                        "error"=>"Killed after $(timeout)ms timeout.")
         end
         out = String(take!(io))
-        rm(tmp; force=true)
-        @info "[execute_code] done [$lang] exit=$(proc.exitcode) output_bytes=$(length(out))"
-        Dict("stdout" => out, "exitcode" => proc.exitcode)
+        rm(src; force=true)
+        try
+            rm(bin; force=true)
+        catch e
+            @warn "[execute_code] failed to remove compiled artifact" path=bin exception=(e, catch_backtrace())
+        end
+        @info "[execute_code] done [$lang] exit=$(proc.exitcode) bytes=$(length(out))"
+        Dict("stdout"=>out, "exitcode"=>proc.exitcode, "language"=>lang, "runtime"=>runtime)
     catch e
         @warn "[execute_code] error" exception=(e, catch_backtrace())
-        Dict("error" => string(e))
+        Dict("error"=>string(e))
     end
 end
 
@@ -1723,6 +1899,15 @@ function tool_metamorph(args)
             "remember"          => tool_remember,
             "recall"            => tool_recall,
             "metamorph"         => tool_metamorph,
+            "ffuf"              => tool_ffuf,
+            "nuclei"            => tool_nuclei,
+            "httpx"             => tool_httpx,
+            "sqlmap"            => tool_sqlmap,
+            "zap_scan"          => tool_zap_scan,
+            "mitm_flows"        => tool_mitm_flows,
+            "ask_ollama"        => tool_ask_ollama,
+            "ollama_pull"       => tool_ollama_pull,
+            "ask_lmstudio"      => tool_ask_lmstudio,
         )
         healed = String[]
         for (k, fn) in static_map
@@ -2702,6 +2887,52 @@ const TOOL_MAP = Dict{String, Function}(
     "ask_claude"     => tool_ask_claude,
     "codex_task"     => tool_codex_task,
     "ask_chatgpt"    => tool_ask_chatgpt,
+    "ask_ollama"     => tool_ask_ollama,
+    "ollama_pull"    => tool_ollama_pull,
+    "ask_lmstudio"   => tool_ask_lmstudio,
+    # ── Pentest & Bug Hunting ──────────────────────────────────────────────────
+    "http_probe"       => tool_http_probe,
+    "security_headers" => tool_security_headers,
+    "cors_check"       => tool_cors_check,
+    "port_scan"        => tool_port_scan,
+    "ssl_inspect"      => tool_ssl_inspect,
+    "dir_fuzz"         => tool_dir_fuzz,
+    "js_harvest"       => tool_js_harvest,
+    "secret_watch"     => tool_secret_watch,
+    "subdomain_enum"   => tool_subdomain_enum,
+    "tech_detect"      => tool_tech_detect,
+    "param_probe"      => tool_param_probe,
+    "pentest_session"  => tool_pentest_session,
+    # ── External CLI security tools ────────────────────────────────────────────
+    "ffuf"              => tool_ffuf,
+    "nuclei"            => tool_nuclei,
+    "httpx"             => tool_httpx,
+    "sqlmap"            => tool_sqlmap,
+    "zap_scan"          => tool_zap_scan,
+    "mitm_flows"        => tool_mitm_flows,
+    # ── Cascade Swarm Runner ───────────────────────────────────────────────────
+    "hackerone_programs" => tool_hackerone_programs,
+    "hackerone_scope"    => tool_hackerone_scope,
+    "cascade_spawn"  => tool_cascade_spawn,
+    "cascade_status" => tool_cascade_status,
+    "cascade_kill"   => tool_cascade_kill,
+    "cascade_submit" => tool_cascade_submit,
+    "swarm_launch"   => tool_swarm_launch,
+    # ── Persistent REPL sessions ───────────────────────────────────────────────
+    "repl_open"  => tool_repl_open,
+    "repl_exec"  => tool_repl_exec,
+    "repl_close" => tool_repl_close,
+    "repl_list"  => tool_repl_list,
+    # ── Burp Suite bridge ──────────────────────────────────────────────────────
+    "burp_ping"    => tool_burp_ping,
+    "burp_history" => tool_burp_history,
+    "burp_triage_autoscore" => tool_burp_triage_autoscore,
+    "burp_mutation_recipe"  => tool_burp_mutation_recipe,
+    "burp_evidence_pack"    => tool_burp_evidence_pack,
+    "burp_submission_draft" => tool_burp_submission_draft,
+    # ── Meta-reasoning sweep ───────────────────────────────────────────────────
+    "meta_sweep" => tool_meta_sweep,
+    "meta_log"   => tool_meta_log,
 )
 
 function dispatch(name::String, args; operator::String="SparkByte")
@@ -2709,7 +2940,7 @@ function dispatch(name::String, args; operator::String="SparkByte")
     fn === nothing && return Dict("error" => "Unknown tool: $name. Available: $(join(sort(collect(keys(TOOL_MAP))), ", "))")
     t0 = datetime2unix(now())
     result = try
-        fn(args)
+        Base.invokelatest(fn, args)
     catch e
         bt = sprint(showerror, e, catch_backtrace())
         # ── Broken forge protocol ─────────────────────────────────────────────
@@ -2734,5 +2965,17 @@ function dispatch(name::String, args; operator::String="SparkByte")
     catch e
         @warn "Async tool usage logging failed" tool=name exception=(e, catch_backtrace())
     end
+
+    # ── Meta-reasoning: record result, auto-trigger sweep when due ─────────────
+    _meta_record(name, result)
+    if _meta_sweep_due() && result isa Dict
+        sweep      = tool_meta_sweep(Dict("n" => 15, "auto" => true))
+        n_reviewed = get(sweep, "reviewed", 0)
+        return merge(result, Dict(
+            "__meta_sweep__"   => sweep,
+            "__sweep_notice__" => "[META-SWEEP] Auto-triggered after $n_reviewed recent results. Check '__meta_sweep__' and investigate before continuing.",
+        ))
+    end
+
     result
 end

@@ -42,8 +42,8 @@ function _pythoncall_module()
         _PYTHONCALL_MOD[] = Base.require(Base.PkgId(Base.UUID("6099a3de-0909-46bc-b1f4-468b9a2dfc0d"), "PythonCall"))
         return _PYTHONCALL_MOD[]
     catch e
-        @warn "PythonCall failed to initialize; browser tools are unavailable" exception=(e, catch_backtrace())
-        return nothing
+        @error "PythonCall failed to initialize; browser tools are unavailable" exception=(e, catch_backtrace())
+        rethrow(e)
     end
 end
 
@@ -504,7 +504,7 @@ function _seed_self_context!(db::SQLite.DB, root::String)
         ("bluetooth_devices","Lists Bluetooth adapter state and known devices using the host operating system."),
         ("send_sms",      "Sends SMS through Twilio when TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER are configured."),
         ("docker_state_dir","SPARKBYTE_STATE_DIR relocates SQLite, telemetry, health logs, and forged-tool state for clean Docker volume mounts."),
-        ("providers",     "gemini / xai / xai_responses / openai / ollama / cerebras — all routed through same agentic loop with full tool access."),
+        ("providers",     "ollama / cerebras / openrouter — each with its own isolated generate loop and full tool access."),
         ("jl_agent_switch","Use /gear JL_AGENT_NAME in chat or set_agent!(engine, name) to switch the active jl-agent. Reloads fat JSON, resets gait/rhythm/stability."),
     ]
     for (topic, content) in engine_caps
@@ -556,7 +556,7 @@ end
 
 function _startup_model()
     configured = strip(get(ENV, "SPARKBYTE_STARTUP_MODEL", ""))
-    return isempty(configured) ? "gemini-3.1-pro-preview" : configured
+    return isempty(configured) ? "google/gemma-7b-it:free" : configured
 end
 
 function _restore_last_model_enabled()
@@ -657,7 +657,7 @@ function _upsert_agents_registry_entry!(root::String, jl_agent_name::String, age
     entry = get(registry, jl_agent_name, Dict{String,Any}())
     entry["agent_file"] = "../agents/$(agent_file_name)"
     haskey(entry, "default_memory_mode") || (entry["default_memory_mode"] = "HYBRID")
-    haskey(entry, "default_backend_id") || (entry["default_backend_id"] = "google-gemini")
+    haskey(entry, "default_backend_id") || (entry["default_backend_id"] = "openrouter")
     haskey(entry, "drive_type") || (entry["drive_type"] = nothing)
     haskey(entry, "tags") || (entry["tags"] = ["imported", "card-cruncher"])
     registry[jl_agent_name] = entry
@@ -842,6 +842,7 @@ function app_main(; host::String=get(ENV, "SPARKBYTE_HOST", DEFAULT_HOST),
     # --- AgentAPI & Hot Wallet Integration ---
 try
     include(joinpath(root, "upgrades", "AgentAPI.jl"))
+    used_api_ports = Set{Int}([A2A_PORT])
     for (name, profile) in engine.mpf_profiles
         agent_data = JLEngine.load_operator_file(joinpath(root, "data", "agents", profile.operator_file))
         
@@ -856,8 +857,17 @@ try
         # 2. AgentAPI Boot
         api_config = get(agent_data, "hosted_api", nothing)
         if api_config !== nothing
+            requested_port = Int(get(api_config, "port", 8080))
+            selected_port = requested_port
+            while selected_port in used_api_ports
+                selected_port += 1
+            end
+            if selected_port != requested_port
+                @warn "[AgentAPI] Port conflict detected; remapping endpoint port" agent=name requested=requested_port selected=selected_port reserved=A2A_PORT
+            end
+            push!(used_api_ports, selected_port)
             config = AgentAPIConfig(
-                get(api_config, "port", 8080),
+                selected_port,
                 get(api_config, "host", "127.0.0.1"),
                 get(api_config, "allowed_ips", ["127.0.0.1"])
             )

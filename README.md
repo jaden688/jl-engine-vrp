@@ -25,7 +25,4 @@ Setup
 The system listens locally and can handle direct system operations based on input.
 
 Important Note
-This project runs with unrestricted access to the local machine. Use only on isolated or test systems,because we have to say it. Review all code before execution because the engine wont. 
-
-
-Plain technical description. No backstory, no character names, no example dialogues. Let me know if you want adjustments to length, emphasis, or structure.
+This project runs with unrestricted access to the local machine. Use caution. 
